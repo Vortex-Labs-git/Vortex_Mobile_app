@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../config/env.dart';
 import 'websocket_service.dart';
 import 'local_storage_service.dart';
 
 class AuthService {
-  static const String baseUrl = 'https://vortexlabsofficial.com/vortex_app';
+  /// Kept for backwards compatibility — the value now lives in Env.
+  static const String baseUrl = Env.apiBase;
 
   static Map<String, dynamic>? currentUser;
   static String? _token;

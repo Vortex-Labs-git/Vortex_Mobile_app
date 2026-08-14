@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/websocket_service.dart';
 import '../../services/esp_direct_service.dart';
+import '../../services/device_control_service.dart';
 import '../motor_calibration_screen.dart';
 
 // Local card widgets
@@ -309,6 +308,20 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   // SECTION 5: HELPER METHODS (read-only state queries)
   // ===========================================================================
 
+  /// Single snackbar helper. Default duration matches Flutter's own SnackBar
+  /// default (4 s), so callers only pass one when they want the shorter
+  /// 2-second confirmation toast.
+  void _showSnack(String message, Color color, {Duration? duration}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color,
+        duration: duration ?? const Duration(seconds: 4),
+      ),
+    );
+  }
+
   bool _isDeviceOnline(String? lastSeen) {
     if (lastSeen == null || lastSeen.isEmpty || lastSeen == 'NULL') {
       return false;
@@ -359,80 +372,34 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   Future<void> _sendModeSwitch(bool scheduleMode) async {
     setState(() => _isSwitchingMode = true);
 
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access_token');
+    final result = await DeviceControlService.instance.setValveBasic(
+      deviceId: _device['id'],
+      name: _device['vwv_name'] ?? _device['device_name'] ?? 'Unknown',
+      angle: _getActualPosition(),
+      scheduleMode: scheduleMode,
+      includeMeta: true,
+      logLabel: 'Mode Switch',
+    );
 
-    try {
-      final currentAngle = _getActualPosition();
-      final requestBody = {
-        'event': 'set_valve_basic',
-        'timestamp': DateTime.now().toUtc().toIso8601String(),
-        'device_id': _device['id'],
-        'set_controller': {
-          'schedule': scheduleMode,
-          'sensor': false,
-        },
-        'valve_data': {
-          'name': _device['vwv_name'] ?? _device['device_name'] ?? 'Unknown',
-          'set_angle': true,
-          'angle': currentAngle,
-        },
-        'ota_update': false,
-      };
+    if (!mounted) return;
 
-      print("📤 Mode Switch: schedule=$scheduleMode → ${jsonEncode(requestBody)}");
-
-      final response = await http.post(
-        Uri.parse('https://vortexlabsofficial.com/vortex_app/control_device.php'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(requestBody),
+    if (result.success) {
+      setState(() {
+        _isScheduleMode = scheduleMode;
+        _controlMode = scheduleMode ? 'schedule' : 'manual';
+      });
+      _showSnack(
+        scheduleMode
+            ? 'Switched to Schedule mode — valve follows schedule'
+            : 'Switched to Manual mode — you control the valve',
+        Colors.blue,
+        duration: const Duration(seconds: 2),
       );
-
-      print("Mode Switch Response: ${response.body}");
-
-      final result = jsonDecode(response.body);
-      if (result['success'] == true) {
-        if (mounted) {
-          setState(() {
-            _isScheduleMode = scheduleMode;
-            _controlMode = scheduleMode ? 'schedule' : 'manual';
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(scheduleMode
-                  ? 'Switched to Schedule mode — valve follows schedule'
-                  : 'Switched to Manual mode — you control the valve'),
-              backgroundColor: Colors.blue,
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: ${result['message']}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      print("Mode Switch Error: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Connection failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSwitchingMode = false);
+    } else {
+      _showSnack(result.displayMessage, Colors.red);
     }
+
+    setState(() => _isSwitchingMode = false);
   }
 
   // ===========================================================================
@@ -460,87 +427,39 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
 
       if (mounted) {
         _startConfirmationWait(targetAngle);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                'Direct command sent! Valve ${command == "Open" ? "opening" : "closing"}...'),
-            backgroundColor: Colors.blue,
-            duration: const Duration(seconds: 2),
-          ),
+        _showSnack(
+          'Direct command sent! Valve ${command == "Open" ? "opening" : "closing"}...',
+          Colors.blue,
+          duration: const Duration(seconds: 2),
         );
         setState(() => _isUpdating = false);
       }
       return;
     }
 
-    // ── Server mode: REST POST ──
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access_token');
+    // ── Server mode: REST via DeviceControlService ──
+    final result = await DeviceControlService.instance.setValveBasic(
+      deviceId: _device['id'],
+      name: _device['vwv_name'] ?? _device['device_name'] ?? 'Unknown',
+      angle: targetAngle,
+      scheduleMode: false,
+      logLabel: 'State',
+    );
 
-    try {
-      final requestBody = {
-        'event': 'set_valve_basic',
-        'device_id': _device['id'],
-        'set_controller': {
-          'schedule': false,
-          'sensor': false,
-        },
-        'valve_data': {
-          'name': _device['vwv_name'] ?? _device['device_name'] ?? 'Unknown',
-          'set_angle': true,
-          'angle': targetAngle,
-        }
-      };
+    if (!mounted) return;
 
-      print("📤 State Request Body: ${jsonEncode(requestBody)}");
-
-      final response = await http.post(
-        Uri.parse('https://vortexlabsofficial.com/vortex_app/control_device.php'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(requestBody),
+    if (result.success) {
+      _startConfirmationWait(targetAngle);
+      _showSnack(
+        'Command sent! Waiting for valve to ${command == "Open" ? "open" : "close"}...',
+        Colors.blue,
+        duration: const Duration(seconds: 2),
       );
-
-      print("Control Response: ${response.body}");
-
-      final result = jsonDecode(response.body);
-      if (result['success'] == true) {
-        if (mounted) {
-          _startConfirmationWait(targetAngle);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  'Command sent! Waiting for valve to ${command == "Open" ? "open" : "close"}...'),
-              backgroundColor: Colors.blue,
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: ${result['message']}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      print("Control Error: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Connection failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isUpdating = false);
+    } else {
+      _showSnack(result.displayMessage, Colors.red);
     }
+
+    setState(() => _isUpdating = false);
   }
 
   Future<void> _sendAngleCommand(int angle) async {
@@ -562,12 +481,10 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
 
       if (mounted) {
         _startConfirmationWait(angle);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Direct command sent! Setting angle to $angle°...'),
-            backgroundColor: Colors.blue,
-            duration: const Duration(seconds: 2),
-          ),
+        _showSnack(
+          'Direct command sent! Setting angle to $angle°...',
+          Colors.blue,
+          duration: const Duration(seconds: 2),
         );
         setState(() => _isAngleUpdating = false);
       }
@@ -575,73 +492,28 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
     }
 
     // ── Server mode ──
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access_token');
+    final result = await DeviceControlService.instance.setValveBasic(
+      deviceId: _device['id'],
+      name: _device['vwv_name'] ?? _device['device_name'] ?? 'Unknown',
+      angle: angle,
+      scheduleMode: false,
+      logLabel: 'Angle',
+    );
 
-    try {
-      final requestBody = {
-        'event': 'set_valve_basic',
-        'device_id': _device['id'],
-        'set_controller': {
-          'schedule': false,
-          'sensor': false,
-        },
-        'valve_data': {
-          'name': _device['vwv_name'] ?? _device['device_name'] ?? 'Unknown',
-          'set_angle': true,
-          'angle': angle,
-        }
-      };
+    if (!mounted) return;
 
-      print("📤 Angle Request Body: ${jsonEncode(requestBody)}");
-
-      final response = await http.post(
-        Uri.parse('https://vortexlabsofficial.com/vortex_app/control_device.php'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(requestBody),
+    if (result.success) {
+      _startConfirmationWait(angle);
+      _showSnack(
+        'Command sent! Waiting for valve to reach $angle°...',
+        Colors.blue,
+        duration: const Duration(seconds: 2),
       );
-
-      print("Angle Control Response: ${response.body}");
-
-      final result = jsonDecode(response.body);
-      if (result['success'] == true) {
-        if (mounted) {
-          _startConfirmationWait(angle);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  'Command sent! Waiting for valve to reach $angle°...'),
-              backgroundColor: Colors.blue,
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: ${result['message']}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      print("Angle Control Error: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Connection failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isAngleUpdating = false);
+    } else {
+      _showSnack(result.displayMessage, Colors.red);
     }
+
+    setState(() => _isAngleUpdating = false);
   }
 
   // ===========================================================================
@@ -770,63 +642,21 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   Future<void> _saveSchedule() async {
     setState(() => _isSavingSchedule = true);
 
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access_token');
+    final result = await DeviceControlService.instance.setSchedule(
+      deviceId: _device['id'],
+      schedules: _schedules,
+    );
 
-    try {
-      final response = await http.post(
-        Uri.parse(
-            'https://vortexlabsofficial.com/vortex_app/control_device.php'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'event': 'set_valve_control',
-          'device_id': _device['id'],
-          'set_scheduledata': {
-            'set_schedule': _schedules.isNotEmpty,
-            'schedule_info': _schedules,
-          },
-        }),
-      );
+    if (!mounted) return;
 
-      print("📅 Schedule Response: ${response.body}");
-
-      final result = jsonDecode(response.body);
-      if (result['success'] == true) {
-        if (mounted) {
-          setState(() => _schedulesLocallyEdited = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Schedule saved successfully!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: ${result['message']}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      print("📅 Schedule Error: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Connection failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSavingSchedule = false);
+    if (result.success) {
+      setState(() => _schedulesLocallyEdited = false);
+      _showSnack('Schedule saved successfully!', Colors.green);
+    } else {
+      _showSnack(result.displayMessage, Colors.red);
     }
+
+    setState(() => _isSavingSchedule = false);
   }
 
   // ===========================================================================
@@ -1079,65 +909,19 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
 
   /// Save device name via control_device.php (set_valve_basic with valve_data.name)
   Future<bool> _saveDeviceName(String newName) async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access_token');
+    final result = await DeviceControlService.instance.setValveBasic(
+      deviceId: _device['id'],
+      name: newName,
+      angle: _getActualPosition(),
+      scheduleMode: _isScheduleMode,
+      includeMeta: true,
+      logLabel: 'Name Update',
+    );
 
-    try {
-      final requestBody = {
-        'event': 'set_valve_basic',
-        'timestamp': DateTime.now().toUtc().toIso8601String(),
-        'device_id': _device['id'],
-        'set_controller': {
-          'schedule': _isScheduleMode,
-          'sensor': false,
-        },
-        'valve_data': {
-          'name': newName,
-          'set_angle': true,
-          'angle': _getActualPosition(),
-        },
-        'ota_update': false,
-      };
+    if (result.success) return true;
 
-      print("📤 Name Update: ${jsonEncode(requestBody)}");
-
-      final response = await http.post(
-        Uri.parse('https://vortexlabsofficial.com/vortex_app/control_device.php'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(requestBody),
-      );
-
-      print("Name Update Response: ${response.body}");
-
-      final result = jsonDecode(response.body);
-      if (result['success'] == true) {
-        return true;
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: ${result['message']}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        return false;
-      }
-    } catch (e) {
-      print("Name Update Error: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Connection failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-      return false;
-    }
+    _showSnack(result.displayMessage, Colors.red);
+    return false;
   }
 
   // -------------------------------------------------------------------------

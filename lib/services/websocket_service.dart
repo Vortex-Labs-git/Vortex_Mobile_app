@@ -6,6 +6,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_service.dart';
+import '../config/env.dart';
 
 /// ============================================================
 /// Vortex Labs Global WebSocket Service
@@ -32,8 +33,8 @@ import 'auth_service.dart';
 
 class WebSocketService {
   // ---- Configuration ----
-  static const String _wsHost = '82.29.161.52';
-  static const int _wsPort = 8085;
+  static const String _wsHost = Env.wsHost;
+  static const int _wsPort = Env.wsPort;
   static const Duration _reconnectDelay = Duration(seconds: 3);
   static const int _maxReconnectAttempts = 5;
   static const Duration _connectTimeout = Duration(seconds: 5);
@@ -147,7 +148,7 @@ class WebSocketService {
     try {
       // Connect with Authorization header
       _channel = IOWebSocketChannel.connect(
-        'ws://$_wsHost:$_wsPort',
+        Env.wsUrl,
         headers: {
           'Authorization': 'Bearer $token',
         },
