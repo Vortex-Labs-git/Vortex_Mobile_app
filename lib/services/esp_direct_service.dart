@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
+import '../config/env.dart';
 
 /// ESP32 Direct Communication Service
 /// 
@@ -62,9 +63,9 @@ class EspDirectService {
 
   // Default ESP32 AP mode settings
   // ESP32 httpd server runs on port 80, WebSocket URI is /ws
-  static const String defaultApIp = '192.168.4.1';
-  static const int defaultPort = 80;
-  static const String wsPath = '/ws';
+  static const String defaultApIp = Env.espIp;
+  static const int defaultPort = Env.espPort;
+  static const String wsPath = Env.espPath;
 
   // ============================================================
   // CONNECTION MANAGEMENT
