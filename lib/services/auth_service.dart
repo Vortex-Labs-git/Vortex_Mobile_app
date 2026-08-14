@@ -5,7 +5,7 @@ import 'websocket_service.dart';
 import 'local_storage_service.dart';
 
 class AuthService {
-  static const String baseUrl = 'https://vortexlabsofficial.com/vortex_app';
+  static const String baseUrl = 'https://vortexlabsofficial.com/device_app';
 
   static Map<String, dynamic>? currentUser;
   static String? _token;

@@ -383,7 +383,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
       print("📤 Mode Switch: schedule=$scheduleMode → ${jsonEncode(requestBody)}");
 
       final response = await http.post(
-        Uri.parse('https://vortexlabsofficial.com/vortex_app/control_device.php'),
+        Uri.parse('https://vortexlabsofficial.com/device_app/control_device.php'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -495,7 +495,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
       print("📤 State Request Body: ${jsonEncode(requestBody)}");
 
       final response = await http.post(
-        Uri.parse('https://vortexlabsofficial.com/vortex_app/control_device.php'),
+        Uri.parse('https://vortexlabsofficial.com/device_app/control_device.php'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -776,7 +776,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
     try {
       final response = await http.post(
         Uri.parse(
-            'https://vortexlabsofficial.com/vortex_app/control_device.php'),
+            'https://vortexlabsofficial.com/device_app/control_device.php'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -1102,7 +1102,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
       print("📤 Name Update: ${jsonEncode(requestBody)}");
 
       final response = await http.post(
-        Uri.parse('https://vortexlabsofficial.com/vortex_app/control_device.php'),
+        Uri.parse('https://vortexlabsofficial.com/device_app/control_device.php'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
