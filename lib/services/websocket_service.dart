@@ -283,6 +283,10 @@ class WebSocketService {
           final Map<String, dynamic> deviceData = data['data'] != null
               ? Map<String, dynamic>.from(data['data'])
               : Map<String, dynamic>.from(data);
+          // The device id lives at the top level of the message, but the
+          // fields we forward come from data['data']. Copy the id in so the
+          // detail screen can tell which device this belongs to.
+          deviceData['id'] = data['device_id'] ?? data['id'];
           print(
               "📊 WS: Received basic detail for ${data['device_id'] ?? data['id']}");
           _deviceDetailController.add(deviceData);

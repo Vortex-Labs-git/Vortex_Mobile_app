@@ -119,8 +119,10 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
     super.initState();
     _device = Map<String, dynamic>.from(widget.deviceData);
 
-    // Read initial schedule mode from DB field user_schedule_ctrl
-    final scheduleCtrl = _device['user_schedule_ctrl'];
+    // Read initial schedule mode. The detail message calls this field
+    // schedule_ctrl; older payloads call it user_schedule_ctrl.
+    final scheduleCtrl =
+        _device['schedule_ctrl'] ?? _device['user_schedule_ctrl'];
     _isScheduleMode =
         (scheduleCtrl == 1 || scheduleCtrl == '1' || scheduleCtrl == true);
 
@@ -185,7 +187,8 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
         // Sync schedule mode from server (unless we're in the middle of
         // sending a switch ourselves)
         if (!_isSwitchingMode) {
-          final scheduleCtrl = _device['user_schedule_ctrl'];
+          final scheduleCtrl =
+              _device['schedule_ctrl'] ?? _device['user_schedule_ctrl'];
           final serverScheduleMode = (scheduleCtrl == 1 ||
               scheduleCtrl == '1' ||
               scheduleCtrl == true);
