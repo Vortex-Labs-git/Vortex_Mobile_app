@@ -15,10 +15,12 @@ class Env {
   static String get controlDeviceUrl => '$apiBase/control_device.php';
 
   // ---- Cloud WebSocket (PHP Ratchet server) ----
+  // Must match the port in websocket_server.php:
+  //   IoServer::factory(new HttpServer(new WsServer($app)), 8084, '0.0.0.0')
   // Switch wsScheme to 'wss' once the server has TLS; nothing else changes.
   static const String wsScheme = 'ws';
   static const String wsHost = '82.29.161.52';
-  static const int wsPort = 8085;
+  static const int wsPort = 8084;
 
   static String get wsUrl => '$wsScheme://$wsHost:$wsPort';
 
