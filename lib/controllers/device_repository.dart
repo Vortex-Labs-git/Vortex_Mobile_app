@@ -362,7 +362,7 @@ class DeviceRepository {
 
   void _emit() {
     _current = DeviceRepositoryState(
-      devices: _withOverlay(_baseDevices)ver,.vme.rvm,
+      devices: _withOverlay(_baseDevices),
       isLoading: _isLoading,
       wsConnected: _wsConnected,
       isOffline: _isOffline,

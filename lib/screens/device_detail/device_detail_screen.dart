@@ -1,29 +1,45 @@
-import 'package:flutter/material.dart';
 import 'dart:async';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-import '../../services/websocket_service.dart';
-import '../../services/esp_direct_service.dart';
+
+import 'package:flutter/material.dart';
+
+import '../../services/device_control_api.dart';
 import '../motor_calibration_screen.dart';
 
-// Local card widgets
+// Controllers (live data + confirmation wait)
+import 'controllers/device_feeds.dart';
+import 'controllers/valve_confirmation_controller.dart';
+
+// Dialogs
+import 'dialogs/edit_device_name_dialog.dart';
+import 'dialogs/schedule_dialogs.dart';
+import 'dialogs/wifi_credentials_dialog.dart';
+
+// Pure helpers
+import 'utils/schedule_utils.dart';
+import 'utils/valve_utils.dart';
+
+// Card widgets
+import 'widgets/change_wifi_button.dart';
+import 'widgets/control_mode_card.dart';
 import 'widgets/device_info_card.dart';
 import 'widgets/mode_toggle_card.dart';
-import 'widgets/control_mode_card.dart';
-import 'widgets/valve_control_card.dart';
+import 'widgets/motor_calibration_button.dart';
 import 'widgets/schedule_card.dart';
 import 'widgets/sensor_card.dart';
-import 'widgets/change_wifi_button.dart';
-import 'widgets/motor_calibration_button.dart';
+import 'widgets/valve_control_card.dart';
 
 // =============================================================================
 // DEVICE DETAIL SCREEN
 // =============================================================================
-// Screen for one valve. Owns ALL state, REST calls, WebSocket subscriptions,
-// ESP32-direct subscriptions, timers, dialogs, and helper logic. The build
-// method just composes the card widgets in widgets/ and wires them up via
-// callbacks.
+// Screen for one valve. It owns the UI state and wires everything together;
+// the heavy lifting lives next door:
+//
+//   services/device_control_api.dart      → REST calls to control_device.php
+//   controllers/device_feeds.dart         → WebSocket / ESP32 subscriptions
+//   controllers/valve_confirmation_*.dart → "waiting for the valve" countdown
+//   dialogs/                              → add-edit schedule, rename, wifi
+//   utils/                                → time + angle + payload parsing
+//   widgets/                              → the cards this screen composes
 //
 // Two modes:
 //   - Server mode (isDirectMode = false): WebSocket + REST through the cloud
@@ -47,7 +63,7 @@ class DeviceDetailScreen extends StatefulWidget {
 
 class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   // ===========================================================================
-  // SECTION 1: STATE VARIABLES
+  // SECTION 1: STATE
   // ===========================================================================
 
   // -- Device data --
@@ -67,12 +83,6 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   bool _isUpdating = false;
   bool _valveControlEnabled = true; // ON = state mode, OFF = angle mode
 
-  // -- Confirmation tracking (waiting for vwv_pos to match target) --
-  bool _waitingForConfirmation = false;
-  int? _pendingTargetAngle;
-  Timer? _confirmationTimer;
-  int _confirmationCountdown = 0;
-
   // -- Angle control (angle mode) --
   double _sliderAngle = 0;
   bool _isAngleUpdating = false;
@@ -82,47 +92,55 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   // -- Schedule data --
   List<Map<String, dynamic>> _schedules = [];
   bool _isSavingSchedule = false;
-  bool _schedulesLoadedFromServer = false;
   bool _schedulesLocallyEdited = false;
 
-  // -- Stream subscriptions (server mode) --
-  StreamSubscription<Map<String, dynamic>>? _detailSub;
-  StreamSubscription<Map<String, dynamic>>? _scheduleSub;
-  StreamSubscription<bool>? _connectionSub;
+  // -- Controllers --
+  late final ValveConfirmationController _confirmation;
+  ServerDeviceFeed? _serverFeed;
+  DirectDeviceFeed? _directFeed;
 
-  // -- Stream subscriptions (direct mode) --
-  StreamSubscription<Map<String, dynamic>>? _espValveDataSub;
-  StreamSubscription<bool>? _espConnectionSub;
-  Timer? _espPollTimer;
-
-  // -- Constants --
-  static const List<String> _dayOptions = [
-    'Every day',
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-    'Sunday',
-  ];
-
-  // -- Shortcut --
+  // -- Shortcuts --
   bool get _isDirectMode => widget.isDirectMode;
 
+  String get _deviceName =>
+      _device['vwv_name'] ?? _device['device_name'] ?? 'Unknown';
+
+  /// Position the valve actually reports, in degrees.
+  int get _actualPosition => parseAngle(_device['vwv_pos']);
+
+  /// Where the valve will be once the pending command lands.
+  bool get _isValveOpen {
+    final pending = _confirmation.targetAngle;
+    if (_confirmation.isWaiting && pending != null) {
+      return pending >= kValveOpenAngle;
+    }
+    return _actualPosition >= kValveOpenAngle;
+  }
+
   // ===========================================================================
-  // SECTION 2: LIFECYCLE METHODS
+  // SECTION 2: LIFECYCLE
   // ===========================================================================
 
   @override
   void initState() {
     super.initState();
     _device = Map<String, dynamic>.from(widget.deviceData);
+    print("🔍 INIT _device = $_device");
+
+    _confirmation = ValveConfirmationController(
+      onChanged: () {
+        if (mounted) setState(() {});
+      },
+      onSuccess: () => _showMessage(
+        '✅ Valve position confirmed!',
+        color: Colors.green,
+        duration: const Duration(seconds: 2),
+      ),
+      onTimeout: _onConfirmationTimeout,
+    );
 
     // Read initial schedule mode from DB field user_schedule_ctrl
-    final scheduleCtrl = _device['user_schedule_ctrl'];
-    _isScheduleMode =
-        (scheduleCtrl == 1 || scheduleCtrl == '1' || scheduleCtrl == true);
+    _isScheduleMode = _readScheduleFlag(_device['user_schedule_ctrl']);
 
     if (_isDirectMode) {
       // Direct mode: only manual control is allowed; clear cached state so
@@ -137,1157 +155,385 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
     }
 
     // Initialize slider angle from DB
-    final vwvPos = _device['vwv_pos'];
-    if (vwvPos != null) {
-      _sliderAngle = (int.tryParse(vwvPos.toString()) ?? 0).toDouble();
+    if (_device['vwv_pos'] != null) {
+      _sliderAngle = _actualPosition.toDouble();
     }
 
     if (_isDirectMode) {
-      _setupEspDirect();
+      _startDirectFeed();
     } else {
-      _setupWebSocket();
+      _startServerFeed();
     }
   }
 
   @override
   void dispose() {
-    _detailSub?.cancel();
-    _scheduleSub?.cancel();
-    _connectionSub?.cancel();
-    _espValveDataSub?.cancel();
-    _espConnectionSub?.cancel();
-    _espPollTimer?.cancel();
-    _confirmationTimer?.cancel();
+    _serverFeed?.dispose();
+    _directFeed?.dispose();
+    _confirmation.dispose();
     _angleEditDebounce?.cancel();
-    if (!_isDirectMode) {
-      WebSocketService.subscribeTo('device_list');
-    }
     super.dispose();
   }
 
+  /// `user_schedule_ctrl` arrives as 1, '1' or true depending on the source.
+  bool _readScheduleFlag(Object? raw) =>
+      raw == 1 || raw == '1' || raw == true;
+
   // ===========================================================================
-  // SECTION 3: WEBSOCKET SETUP (SERVER MODE)
+  // SECTION 3: LIVE DATA (server WebSocket / ESP32 direct)
   // ===========================================================================
 
-  void _setupWebSocket() {
-    _wsConnected = WebSocketService.isConnected;
-
-    _connectionSub = WebSocketService.connectionStream.listen((connected) {
-      if (mounted) setState(() => _wsConnected = connected);
-    });
-
-    _detailSub = WebSocketService.deviceDetailStream.listen((data) {
-      if (mounted && data['id']?.toString() == _device['id']?.toString()) {
-        setState(() {
-          _device = {..._device, ...data};
-        });
-
-        // Sync schedule mode from server (unless we're in the middle of
-        // sending a switch ourselves)
-        if (!_isSwitchingMode) {
-          final scheduleCtrl = _device['user_schedule_ctrl'];
-          final serverScheduleMode = (scheduleCtrl == 1 ||
-              scheduleCtrl == '1' ||
-              scheduleCtrl == true);
-          if (serverScheduleMode != _isScheduleMode) {
-            setState(() {
-              _isScheduleMode = serverScheduleMode;
-              _controlMode = serverScheduleMode ? 'schedule' : 'manual';
-            });
-          }
-        }
-
-        // Confirmation check: did vwv_pos catch up to our pending target?
-        if (_waitingForConfirmation && _pendingTargetAngle != null) {
-          final actualPos =
-              int.tryParse((_device['vwv_pos'] ?? '').toString()) ?? -1;
-          if (actualPos == _pendingTargetAngle) {
-            _onConfirmationSuccess();
-          }
-        }
-
-        // Update slider from actual position when user is NOT editing and
-        // NOT waiting for an angle-mode confirmation
-        if (!_userIsEditingAngle &&
-            !(_waitingForConfirmation && !_valveControlEnabled)) {
-          final vwvPos = _device['vwv_pos'];
-          if (vwvPos != null) {
-            final parsed = int.tryParse(vwvPos.toString());
-            if (parsed != null) {
-              setState(() => _sliderAngle = parsed.toDouble());
-            }
-          }
-        }
-      }
-    });
-
-    _scheduleSub = WebSocketService.scheduleStream.listen((data) {
-      if (mounted &&
-          data['device_id']?.toString() == _device['id']?.toString() &&
-          !_schedulesLocallyEdited) {
-        _loadScheduleFromServer(data);
-      }
-    });
-
-    WebSocketService.subscribeTo(
-      'device_detail',
+  void _startServerFeed() {
+    final feed = ServerDeviceFeed(
       deviceId: _device['id']?.toString(),
+      onConnectionChanged: (connected) {
+        if (mounted) setState(() => _wsConnected = connected);
+      },
+      onDeviceUpdate: _onServerDeviceUpdate,
+      onScheduleUpdate: _onServerScheduleUpdate,
     );
+
+    _serverFeed = feed;
+    _wsConnected = feed.isConnected;
+    feed.start();
   }
 
-  // ===========================================================================
-  // SECTION 4: ESP32 DIRECT SETUP
-  // ===========================================================================
+  void _startDirectFeed() {
+    final feed = DirectDeviceFeed(
+      device: () => _device,
+      onConnectionChanged: (connected) {
+        if (mounted) setState(() => _wsConnected = connected);
+      },
+      onValveData: _onDirectValveData,
+    );
 
-  void _setupEspDirect() {
-    final esp = EspDirectService.instance;
-    _wsConnected = esp.isConnected;
+    _directFeed = feed;
+    _wsConnected = feed.isConnected;
+    feed.start();
+  }
 
-    _espConnectionSub = esp.connectionStream.listen((connected) {
-      if (mounted) setState(() => _wsConnected = connected);
-    });
+  void _onServerDeviceUpdate(Map<String, dynamic> data) {
+    if (!mounted) return;
 
-    _espValveDataSub = esp.valveDataStream.listen((data) {
-      if (!mounted) return;
+    setState(() => _device = {..._device, ...data});
 
-      final valveData = data['get_valvedata'] ?? {};
-      final angle = valveData['angle'];
-      final isOpen = valveData['is_open'];
-      final isClose = valveData['is_close'];
-
-      // Map ESP32 valve_data fields → server DB-equivalent fields so the
-      // rest of this screen's UI logic works the same in both modes.
-      if (angle != null) {
-        final angleInt =
-            angle is int ? angle : int.tryParse(angle.toString()) ?? 0;
+    // Sync schedule mode from server (unless we're in the middle of sending a
+    // switch ourselves)
+    if (!_isSwitchingMode) {
+      final serverScheduleMode = _readScheduleFlag(_device['user_schedule_ctrl']);
+      if (serverScheduleMode != _isScheduleMode) {
         setState(() {
-          _device['vwv_pos'] = angleInt.toString();
-          _device['vwv_is_open'] = (isOpen == true) ? 1 : 0;
-          _device['vwv_is_close'] = (isClose == true) ? 1 : 0;
-          if (!_userIsEditingAngle) {
-            _sliderAngle = angleInt.toDouble();
-          }
+          _isScheduleMode = serverScheduleMode;
+          _controlMode = serverScheduleMode ? 'schedule' : 'manual';
         });
       }
+    }
 
-      // Confirmation check (same logic as server mode)
-      if (_waitingForConfirmation && _pendingTargetAngle != null) {
-        final actualPos = _getActualPosition();
-        if (actualPos == _pendingTargetAngle) {
-          _onConfirmationSuccess();
+    // Did vwv_pos catch up to our pending target? (-1 so a missing position
+    // can never be mistaken for a real 0°)
+    _confirmation.reportPosition(parseAngle(_device['vwv_pos'], fallback: -1));
+
+    // Follow the reported position while the user isn't dragging and we aren't
+    // waiting on an angle-mode confirmation.
+    if (!_userIsEditingAngle &&
+        !(_confirmation.isWaiting && !_valveControlEnabled)) {
+      final reported = _device['vwv_pos'];
+      final parsed = reported == null ? null : int.tryParse(reported.toString());
+      if (parsed != null) {
+        setState(() => _sliderAngle = parsed.toDouble());
+      }
+    }
+  }
+
+  void _onServerScheduleUpdate(Map<String, dynamic> data) {
+    // Never overwrite edits the user hasn't saved yet.
+    if (!mounted || _schedulesLocallyEdited) return;
+
+    final parsed = parseSchedulePayload(data);
+    if (parsed == null) return;
+
+    setState(() => _schedules = parsed);
+    print("📅 Loaded ${_schedules.length} schedule entries from server");
+  }
+
+  /// Maps the ESP32's `get_valvedata` fields onto the server DB-equivalent
+  /// fields, so the rest of this screen works the same in both modes.
+  void _onDirectValveData(Map<String, dynamic> valveData) {
+    if (!mounted) return;
+
+    final angle = valveData['angle'];
+    if (angle != null) {
+      final angleInt = parseAngle(angle);
+      setState(() {
+        _device['vwv_pos'] = angleInt.toString();
+        _device['vwv_is_open'] = (valveData['is_open'] == true) ? 1 : 0;
+        _device['vwv_is_close'] = (valveData['is_close'] == true) ? 1 : 0;
+        if (!_userIsEditingAngle) {
+          _sliderAngle = angleInt.toDouble();
         }
-      }
+      });
+    }
 
-      print("📱 ESP32 Direct: valve angle=$angle, open=$isOpen, close=$isClose");
-    });
-
-    // Initial request, then poll every 2 seconds
-    _requestEspValveData();
-    _espPollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-      if (mounted && esp.isAuthenticated) {
-        _requestEspValveData();
-      }
-    });
-  }
-
-  void _requestEspValveData() {
-    final esp = EspDirectService.instance;
-    if (!esp.isAuthenticated) return;
-
-    final userId = _device['user_id']?.toString() ?? 'app_user';
-    final deviceId = _device['id']?.toString() ?? '';
-    final deviceName =
-        _device['vwv_name'] ?? _device['device_name'] ?? 'Valve';
-    esp.requestValveData(
-      userId: userId,
-      deviceId: deviceId,
-      deviceName: deviceName,
-    );
+    _confirmation.reportPosition(_actualPosition);
   }
 
   // ===========================================================================
-  // SECTION 5: HELPER METHODS (read-only state queries)
-  // ===========================================================================
-
-  bool _isDeviceOnline(String? lastSeen) {
-    if (lastSeen == null || lastSeen.isEmpty || lastSeen == 'NULL') {
-      return false;
-    }
-    try {
-      final lastSeenTime = DateTime.parse(lastSeen);
-      final now = DateTime.now();
-      return now.difference(lastSeenTime).inSeconds <= 30;
-    } catch (e) {
-      print("⚠️ Error parsing vwv_last_seen: $e");
-      return false;
-    }
-  }
-
-  int _getActualPosition() {
-    return int.tryParse((_device['vwv_pos'] ?? '0').toString()) ?? 0;
-  }
-
-  int _getUserRequestedPosition() {
-    return int.tryParse((_device['user_vwv_pos'] ?? '0').toString()) ?? 0;
-  }
-
-  bool _isValveOpen() {
-    if (_waitingForConfirmation && _pendingTargetAngle != null) {
-      return _pendingTargetAngle! >= 45;
-    }
-    return _getActualPosition() >= 45;
-  }
-
-  String _formatTime(TimeOfDay time) {
-    final h = time.hour.toString().padLeft(2, '0');
-    final m = time.minute.toString().padLeft(2, '0');
-    return '$h:$m';
-  }
-
-  TimeOfDay _parseTime(String timeStr) {
-    final parts = timeStr.split(':');
-    return TimeOfDay(
-      hour: int.tryParse(parts[0]) ?? 0,
-      minute: int.tryParse(parts[1]) ?? 0,
-    );
-  }
-
-  // ===========================================================================
-  // SECTION 6: MODE SWITCH (Manual ↔ Schedule)
+  // SECTION 4: MODE SWITCH (Manual ↔ Schedule)
   // ===========================================================================
 
   Future<void> _sendModeSwitch(bool scheduleMode) async {
     setState(() => _isSwitchingMode = true);
 
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access_token');
+    final result = await DeviceControlApi.switchControlMode(
+      deviceId: _device['id'],
+      deviceName: _deviceName,
+      angle: _actualPosition,
+      scheduleMode: scheduleMode,
+    );
 
-    try {
-      final currentAngle = _getActualPosition();
-      final requestBody = {
-        'event': 'set_valve_basic',
-        'timestamp': DateTime.now().toUtc().toIso8601String(),
-        'device_id': _device['id'],
-        'set_controller': {
-          'schedule': scheduleMode,
-          'sensor': false,
-        },
-        'valve_data': {
-          'name': _device['vwv_name'] ?? _device['device_name'] ?? 'Unknown',
-          'set_angle': true,
-          'angle': currentAngle,
-        },
-        'ota_update': false,
-      };
+    if (!mounted) return;
 
-      print("📤 Mode Switch: schedule=$scheduleMode → ${jsonEncode(requestBody)}");
-
-      final response = await http.post(
-        Uri.parse('https://vortexlabsofficial.com/vortex_app/control_device.php'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(requestBody),
+    if (result.success) {
+      setState(() {
+        _isScheduleMode = scheduleMode;
+        _controlMode = scheduleMode ? 'schedule' : 'manual';
+      });
+      _showMessage(
+        scheduleMode
+            ? 'Switched to Schedule mode — valve follows schedule'
+            : 'Switched to Manual mode — you control the valve',
+        color: Colors.blue,
+        duration: const Duration(seconds: 2),
       );
-
-      print("Mode Switch Response: ${response.body}");
-
-      final result = jsonDecode(response.body);
-      if (result['success'] == true) {
-        if (mounted) {
-          setState(() {
-            _isScheduleMode = scheduleMode;
-            _controlMode = scheduleMode ? 'schedule' : 'manual';
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(scheduleMode
-                  ? 'Switched to Schedule mode — valve follows schedule'
-                  : 'Switched to Manual mode — you control the valve'),
-              backgroundColor: Colors.blue,
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: ${result['message']}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      print("Mode Switch Error: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Connection failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSwitchingMode = false);
+    } else {
+      _showMessage(result.displayMessage, color: Colors.red);
     }
+
+    setState(() => _isSwitchingMode = false);
   }
 
   // ===========================================================================
-  // SECTION 7: VALVE COMMANDS (Open/Close + Angle)
+  // SECTION 5: VALVE COMMANDS (Open/Close + Angle)
   // ===========================================================================
 
   Future<void> _sendControlCommand(String command) async {
+    final bool opening = command == 'Open';
+    final int targetAngle = opening ? 90 : 0;
+
     setState(() => _isUpdating = true);
 
-    final int targetAngle = (command == "Open") ? 90 : 0;
-
-    // ── Direct mode: send straight to ESP32 ──
     if (_isDirectMode) {
-      final deviceName =
-          _device['vwv_name'] ?? _device['device_name'] ?? 'Valve';
-      print("📤 ESP32 Direct: set_valve_basic angle=$targetAngle");
-      EspDirectService.instance.setValveAngle(
-        angle: targetAngle,
-        deviceName: deviceName,
+      _sendDirectAngle(targetAngle);
+      _showMessage(
+        'Direct command sent! Valve ${opening ? "opening" : "closing"}...',
+        color: Colors.blue,
+        duration: const Duration(seconds: 2),
       );
-
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (mounted) _requestEspValveData();
-      });
-
-      if (mounted) {
-        _startConfirmationWait(targetAngle);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                'Direct command sent! Valve ${command == "Open" ? "opening" : "closing"}...'),
-            backgroundColor: Colors.blue,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-        setState(() => _isUpdating = false);
-      }
+      setState(() => _isUpdating = false);
       return;
     }
 
-    // ── Server mode: REST POST ──
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access_token');
+    final result = await DeviceControlApi.setValveAngle(
+      deviceId: _device['id'],
+      deviceName: _deviceName,
+      angle: targetAngle,
+    );
 
-    try {
-      final requestBody = {
-        'event': 'set_valve_basic',
-        'device_id': _device['id'],
-        'set_controller': {
-          'schedule': false,
-          'sensor': false,
-        },
-        'valve_data': {
-          'name': _device['vwv_name'] ?? _device['device_name'] ?? 'Unknown',
-          'set_angle': true,
-          'angle': targetAngle,
-        }
-      };
+    if (!mounted) return;
 
-      print("📤 State Request Body: ${jsonEncode(requestBody)}");
-
-      final response = await http.post(
-        Uri.parse('https://vortexlabsofficial.com/vortex_app/control_device.php'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(requestBody),
+    if (result.success) {
+      _startConfirmationWait(targetAngle);
+      _showMessage(
+        'Command sent! Waiting for valve to ${opening ? "open" : "close"}...',
+        color: Colors.blue,
+        duration: const Duration(seconds: 2),
       );
-
-      print("Control Response: ${response.body}");
-
-      final result = jsonDecode(response.body);
-      if (result['success'] == true) {
-        if (mounted) {
-          _startConfirmationWait(targetAngle);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  'Command sent! Waiting for valve to ${command == "Open" ? "open" : "close"}...'),
-              backgroundColor: Colors.blue,
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: ${result['message']}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      print("Control Error: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Connection failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isUpdating = false);
+    } else {
+      _showMessage(result.displayMessage, color: Colors.red);
     }
+
+    setState(() => _isUpdating = false);
   }
 
   Future<void> _sendAngleCommand(int angle) async {
     setState(() => _isAngleUpdating = true);
 
-    // ── Direct mode ──
     if (_isDirectMode) {
-      final deviceName =
-          _device['vwv_name'] ?? _device['device_name'] ?? 'Valve';
-      print("📤 ESP32 Direct: set_valve_basic angle=$angle");
-      EspDirectService.instance.setValveAngle(
-        angle: angle,
-        deviceName: deviceName,
+      _sendDirectAngle(angle);
+      _showMessage(
+        'Direct command sent! Setting angle to $angle°...',
+        color: Colors.blue,
+        duration: const Duration(seconds: 2),
       );
-
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (mounted) _requestEspValveData();
-      });
-
-      if (mounted) {
-        _startConfirmationWait(angle);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Direct command sent! Setting angle to $angle°...'),
-            backgroundColor: Colors.blue,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-        setState(() => _isAngleUpdating = false);
-      }
+      setState(() => _isAngleUpdating = false);
       return;
     }
 
-    // ── Server mode ──
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access_token');
+    final result = await DeviceControlApi.setValveAngle(
+      deviceId: _device['id'],
+      deviceName: _deviceName,
+      angle: angle,
+    );
 
-    try {
-      final requestBody = {
-        'event': 'set_valve_basic',
-        'device_id': _device['id'],
-        'set_controller': {
-          'schedule': false,
-          'sensor': false,
-        },
-        'valve_data': {
-          'name': _device['vwv_name'] ?? _device['device_name'] ?? 'Unknown',
-          'set_angle': true,
-          'angle': angle,
-        }
-      };
+    if (!mounted) return;
 
-      print("📤 Angle Request Body: ${jsonEncode(requestBody)}");
-
-      final response = await http.post(
-        Uri.parse('https://vortexlabsofficial.com/vortex_app/control_device.php'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(requestBody),
+    if (result.success) {
+      _startConfirmationWait(angle);
+      _showMessage(
+        'Command sent! Waiting for valve to reach $angle°...',
+        color: Colors.blue,
+        duration: const Duration(seconds: 2),
       );
-
-      print("Angle Control Response: ${response.body}");
-
-      final result = jsonDecode(response.body);
-      if (result['success'] == true) {
-        if (mounted) {
-          _startConfirmationWait(angle);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  'Command sent! Waiting for valve to reach $angle°...'),
-              backgroundColor: Colors.blue,
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: ${result['message']}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      print("Angle Control Error: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Connection failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isAngleUpdating = false);
+    } else {
+      _showMessage(result.displayMessage, color: Colors.red);
     }
+
+    setState(() => _isAngleUpdating = false);
   }
 
-  // ===========================================================================
-  // SECTION 8: CONFIRMATION WAIT LOGIC
-  // ===========================================================================
+  /// Direct mode: straight to the ESP32, no REST round trip.
+  void _sendDirectAngle(int angle) {
+    _directFeed?.setValveAngle(angle);
+    _startConfirmationWait(angle);
+  }
 
   void _startConfirmationWait(int targetAngle) {
-    _confirmationTimer?.cancel();
-
-    // Direct mode talks straight to the ESP32 over the local AP, so the
-    // valve confirms its position much faster — 10s is plenty. Server
-    // mode goes through the cloud, so we give it the full 20s.
-    final int timeoutSeconds = _isDirectMode ? 10 : 20;
-
-    setState(() {
-      _waitingForConfirmation = true;
-      _pendingTargetAngle = targetAngle;
-      _confirmationCountdown = timeoutSeconds;
-    });
-
-    _confirmationTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-
-      setState(() => _confirmationCountdown--);
-
-      if (_confirmationCountdown <= 0) {
-        timer.cancel();
-        _onConfirmationTimeout();
-      }
-    });
-  }
-
-  void _onConfirmationSuccess() {
-    _confirmationTimer?.cancel();
-    setState(() {
-      _waitingForConfirmation = false;
-      _pendingTargetAngle = null;
-      _confirmationCountdown = 0;
-    });
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Valve position confirmed!'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
-        ),
-      );
-    }
+    _confirmation.start(
+      targetAngle,
+      timeoutSeconds: _isDirectMode
+          ? kDirectConfirmationTimeoutSeconds
+          : kServerConfirmationTimeoutSeconds,
+    );
   }
 
   /// Timeout: do NOT revert the slider — the next WebSocket / ESP push will
   /// carry the real position within ~2 seconds and the UI self-corrects.
-  void _onConfirmationTimeout() {
-    final actualPos = _getActualPosition();
-    final targetWas = _pendingTargetAngle;
-
-    setState(() {
-      _waitingForConfirmation = false;
-      _pendingTargetAngle = null;
-      _confirmationCountdown = 0;
-    });
-
-    if (targetWas != null && actualPos == targetWas) {
-      _onConfirmationSuccess();
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                '⏳ Valve is still responding. Position will update shortly.'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
+  void _onConfirmationTimeout(int targetAngle) {
+    if (_actualPosition == targetAngle) {
+      _showMessage(
+        '✅ Valve position confirmed!',
+        color: Colors.green,
+        duration: const Duration(seconds: 2),
+      );
+      return;
     }
+
+    _showMessage(
+      '⏳ Valve is still responding. Position will update shortly.',
+      color: Colors.orange,
+      duration: const Duration(seconds: 3),
+    );
   }
 
   // ===========================================================================
-  // SECTION 9: SCHEDULE LOGIC (load + save + delete)
+  // SECTION 6: SCHEDULE (add / edit / delete / save)
   // ===========================================================================
 
-  /// Parse schedule data from WebSocket device_schedule event.
-  /// Server sends: {"event":"device_schedule", "device_id":"...",
-  ///                "schedule":{ ..., "schedule":"[JSON string]", ... }}
-  void _loadScheduleFromServer(Map<String, dynamic> data) {
-    try {
-      final scheduleData = data['schedule'];
-      if (scheduleData == null) return;
+  Future<void> _showScheduleDialog({int? editIndex}) async {
+    final entry = await showScheduleEntryDialog(
+      context,
+      initial: editIndex != null ? _schedules[editIndex] : null,
+    );
+    if (entry == null || !mounted) return;
 
-      final scheduleJson = scheduleData['schedule'];
-      if (scheduleJson == null || scheduleJson.toString().isEmpty) {
-        setState(() {
-          _schedules = [];
-          _schedulesLoadedFromServer = true;
-        });
-        return;
-      }
-
-      List<dynamic> parsed;
-      if (scheduleJson is String) {
-        parsed = jsonDecode(scheduleJson);
-      } else if (scheduleJson is List) {
-        parsed = scheduleJson;
+    setState(() {
+      _schedulesLocallyEdited = true;
+      if (editIndex != null) {
+        _schedules[editIndex] = entry;
       } else {
-        print("⚠️ Unexpected schedule format: ${scheduleJson.runtimeType}");
-        return;
+        _schedules.add(entry);
       }
+    });
+  }
 
-      setState(() {
-        _schedules =
-            parsed.map((e) => Map<String, dynamic>.from(e)).toList();
-        _schedulesLoadedFromServer = true;
-      });
+  Future<void> _deleteSchedule(int index) async {
+    final confirmed = await showDeleteScheduleDialog(context, _schedules[index]);
+    if (!confirmed || !mounted) return;
 
-      print("📅 Loaded ${_schedules.length} schedule entries from server");
-    } catch (e) {
-      print("❌ Error parsing schedule data: $e");
-    }
+    setState(() {
+      _schedulesLocallyEdited = true;
+      _schedules.removeAt(index);
+    });
   }
 
   Future<void> _saveSchedule() async {
     setState(() => _isSavingSchedule = true);
 
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access_token');
+    final result = await DeviceControlApi.saveSchedule(
+      deviceId: _device['id'],
+      schedules: _schedules,
+    );
 
-    try {
-      final response = await http.post(
-        Uri.parse(
-            'https://vortexlabsofficial.com/vortex_app/control_device.php'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'event': 'set_valve_control',
-          'device_id': _device['id'],
-          'set_scheduledata': {
-            'set_schedule': _schedules.isNotEmpty,
-            'schedule_info': _schedules,
-          },
-        }),
-      );
+    if (!mounted) return;
 
-      print("📅 Schedule Response: ${response.body}");
-
-      final result = jsonDecode(response.body);
-      if (result['success'] == true) {
-        if (mounted) {
-          setState(() => _schedulesLocallyEdited = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Schedule saved successfully!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: ${result['message']}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      print("📅 Schedule Error: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Connection failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSavingSchedule = false);
+    if (result.success) {
+      // Saved — the server is authoritative again.
+      setState(() => _schedulesLocallyEdited = false);
+      _showMessage('Schedule saved successfully!', color: Colors.green);
+    } else {
+      _showMessage(result.displayMessage, color: Colors.red);
     }
+
+    setState(() => _isSavingSchedule = false);
   }
 
   // ===========================================================================
-  // SECTION 10: DIALOGS
+  // SECTION 7: DEVICE NAME
   // ===========================================================================
 
-  // -------------------------------------------------------------------------
-  // 10.1  Add / Edit Schedule Dialog
-  // -------------------------------------------------------------------------
-  void _showAddScheduleDialog({int? editIndex}) {
-    String selectedDay =
-        editIndex != null ? _schedules[editIndex]['day'] : 'Every day';
-    TimeOfDay openTime = editIndex != null
-        ? _parseTime(_schedules[editIndex]['open'] ?? '08:00')
-        : const TimeOfDay(hour: 8, minute: 0);
-    TimeOfDay closeTime = editIndex != null
-        ? _parseTime(_schedules[editIndex]['close'] ?? '08:20')
-        : const TimeOfDay(hour: 8, minute: 20);
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: Text(editIndex != null ? 'Edit Schedule' : 'Add Schedule'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Day picker
-                  DropdownButtonFormField<String>(
-                    value: selectedDay,
-                    decoration: const InputDecoration(
-                      labelText: 'Day',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    items: _dayOptions
-                        .map((d) =>
-                            DropdownMenuItem(value: d, child: Text(d)))
-                        .toList(),
-                    onChanged: (val) {
-                      setDialogState(() => selectedDay = val!);
-                    },
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Open time picker
-                  InkWell(
-                    onTap: () async {
-                      final picked = await showTimePicker(
-                        context: context,
-                        initialTime: openTime,
-                      );
-                      if (picked != null) {
-                        setDialogState(() => openTime = picked);
-                      }
-                    },
-                    child: InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Open Time',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            _formatTime(openTime),
-                            style: const TextStyle(fontSize: 16),
-                          ),
-                          Icon(Icons.access_time, color: Colors.green[600]),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Close time picker
-                  InkWell(
-                    onTap: () async {
-                      final picked = await showTimePicker(
-                        context: context,
-                        initialTime: closeTime,
-                      );
-                      if (picked != null) {
-                        setDialogState(() => closeTime = picked);
-                      }
-                    },
-                    child: InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Close Time',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            _formatTime(closeTime),
-                            style: const TextStyle(fontSize: 16),
-                          ),
-                          Icon(Icons.access_time, color: Colors.red[600]),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    final entry = {
-                      'day': selectedDay,
-                      'open': _formatTime(openTime),
-                      'close': _formatTime(closeTime),
-                    };
-
-                    setState(() {
-                      _schedulesLocallyEdited = true;
-                      if (editIndex != null) {
-                        _schedules[editIndex] = entry;
-                      } else {
-                        _schedules.add(entry);
-                      }
-                    });
-                    Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF3F51B5),
-                    foregroundColor: Colors.white,
-                  ),
-                  child: Text(editIndex != null ? 'Update' : 'Add'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+  Future<void> _showEditNameDialog() async {
+    final newName = await showEditDeviceNameDialog(
+      context,
+      currentName: _device['vwv_name'] ?? _device['device_name'],
+      onSave: _saveDeviceName,
     );
+    if (newName == null || !mounted) return;
+
+    setState(() {
+      _device['vwv_name'] = newName;
+      _device['device_name'] = newName;
+    });
+    _showMessage('Device name updated!', color: Colors.green);
   }
 
-  // -------------------------------------------------------------------------
-  // 10.2  Delete Schedule Dialog
-  // -------------------------------------------------------------------------
-  void _deleteSchedule(int index) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Schedule'),
-        content: Text(
-            'Delete "${_schedules[index]['day']} — Open: ${_schedules[index]['open']}, Close: ${_schedules[index]['close']}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              setState(() {
-                _schedulesLocallyEdited = true;
-                _schedules.removeAt(index);
-              });
-              Navigator.pop(context);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // -------------------------------------------------------------------------
-  // 10.3  Edit Device Name Dialog
-  // -------------------------------------------------------------------------
-  void _showEditNameDialog() {
-    final controller = TextEditingController(
-        text: _device['vwv_name'] ?? _device['device_name']);
-    bool isSaving = false;
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
-          title: const Text('Edit Device Name'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'Device Name',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: isSaving ? null : () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: isSaving
-                  ? null
-                  : () async {
-                      final newName = controller.text.trim();
-                      if (newName.isEmpty) return;
-
-                      setDialogState(() => isSaving = true);
-
-                      final success = await _saveDeviceName(newName);
-
-                      if (success && mounted) {
-                        setState(() {
-                          _device['vwv_name'] = newName;
-                          _device['device_name'] = newName;
-                        });
-                        Navigator.pop(dialogContext);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Device name updated!'),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                      } else {
-                        setDialogState(() => isSaving = false);
-                      }
-                    },
-              child: isSaving
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Text('Save'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Save device name via control_device.php (set_valve_basic with valve_data.name)
   Future<bool> _saveDeviceName(String newName) async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access_token');
+    final result = await DeviceControlApi.renameDevice(
+      deviceId: _device['id'],
+      newName: newName,
+      angle: _actualPosition,
+      scheduleMode: _isScheduleMode,
+    );
 
-    try {
-      final requestBody = {
-        'event': 'set_valve_basic',
-        'timestamp': DateTime.now().toUtc().toIso8601String(),
-        'device_id': _device['id'],
-        'set_controller': {
-          'schedule': _isScheduleMode,
-          'sensor': false,
-        },
-        'valve_data': {
-          'name': newName,
-          'set_angle': true,
-          'angle': _getActualPosition(),
-        },
-        'ota_update': false,
-      };
-
-      print("📤 Name Update: ${jsonEncode(requestBody)}");
-
-      final response = await http.post(
-        Uri.parse('https://vortexlabsofficial.com/vortex_app/control_device.php'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(requestBody),
-      );
-
-      print("Name Update Response: ${response.body}");
-
-      final result = jsonDecode(response.body);
-      if (result['success'] == true) {
-        return true;
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: ${result['message']}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        return false;
-      }
-    } catch (e) {
-      print("Name Update Error: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Connection failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-      return false;
+    if (!result.success) {
+      _showMessage(result.displayMessage, color: Colors.red);
     }
+    return result.success;
   }
 
-  // -------------------------------------------------------------------------
-  // 10.4  WiFi Credentials Dialog (Direct mode)
-  // -------------------------------------------------------------------------
-  /// Shows a popup to enter home WiFi SSID and password, then sends
-  /// set_valve_wifi to the connected ESP32. Architecture Doc Page 13.
-  void _showWifiCredentialsDialog() {
-    final ssidController = TextEditingController();
-    final passwordController = TextEditingController();
-    bool obscurePassword = true;
-    bool isSending = false;
+  // ===========================================================================
+  // SECTION 8: SNACKBAR HELPER
+  // ===========================================================================
 
-    showDialog(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.wifi, color: Color(0xFF3F51B5)),
-              SizedBox(width: 10),
-              Text('Set Home WiFi'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Enter your home WiFi credentials. The valve will restart and connect to this network.',
-                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: ssidController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'WiFi Name (SSID)',
-                  hintText: 'Enter your home WiFi name',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.wifi),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: passwordController,
-                obscureText: obscurePassword,
-                decoration: InputDecoration(
-                  labelText: 'WiFi Password',
-                  hintText: 'Enter WiFi password',
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.lock),
-                  suffixIcon: IconButton(
-                    icon: Icon(obscurePassword
-                        ? Icons.visibility
-                        : Icons.visibility_off),
-                    onPressed: () {
-                      setDialogState(
-                          () => obscurePassword = !obscurePassword);
-                    },
-                  ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: isSending ? null : () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton.icon(
-              onPressed: isSending
-                  ? null
-                  : () {
-                      final ssid = ssidController.text.trim();
-                      final password = passwordController.text;
-
-                      if (ssid.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Please enter WiFi name'),
-                          ),
-                        );
-                        return;
-                      }
-
-                      if (!EspDirectService.instance.isAuthenticated) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                                'Not connected to valve. Go back and reconnect.'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                        return;
-                      }
-
-                      setDialogState(() => isSending = true);
-
-                      EspDirectService.instance.setWifiCredentials(
-                        ssid: ssid,
-                        password: password,
-                      );
-
-                      print("📤 ESP32: set_valve_wifi ssid=$ssid");
-
-                      // ESP32 will restart — connection will be lost
-                      Future.delayed(const Duration(seconds: 3), () {
-                        if (mounted) {
-                          Navigator.pop(dialogContext);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'WiFi credentials sent! Valve will restart and connect to your home WiFi.',
-                              ),
-                              backgroundColor: Colors.green,
-                              duration: Duration(seconds: 5),
-                            ),
-                          );
-                        }
-                      });
-                    },
-              icon: isSending
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Icon(Icons.send),
-              label: Text(isSending ? 'Sending...' : 'Save & Connect'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ],
-        ),
+  void _showMessage(String message, {Color? color, Duration? duration}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color,
+        duration: duration ?? const Duration(seconds: 4),
       ),
     );
   }
 
   // ===========================================================================
-  // SECTION 11: BUILD METHOD
+  // SECTION 9: BUILD
   // ===========================================================================
 
   @override
   Widget build(BuildContext context) {
     final bool isOnline = _isDirectMode
         ? true
-        : _isDeviceOnline(_device['vwv_last_seen']?.toString());
+        : isDeviceOnline(_device['vwv_last_seen']?.toString());
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
@@ -1315,12 +561,10 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 11.1  Device info card (always shown)
+            // 9.1  Device info card (always shown)
             DeviceInfoCard(
               productType: _device['vwv_version']?.toString() ?? 'Unknown',
-              deviceName: _device['vwv_name'] ??
-                  _device['device_name'] ??
-                  'Unknown',
+              deviceName: _deviceName,
               isOnline: isOnline,
               isDirectMode: _isDirectMode,
               onEditName: _showEditNameDialog,
@@ -1328,7 +572,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
 
             const SizedBox(height: 16),
 
-            // 11.2  Mode toggle (server mode only)
+            // 9.2  Mode toggle (server mode only)
             if (!_isDirectMode) ...[
               ModeToggleCard(
                 isScheduleMode: _isScheduleMode,
@@ -1338,45 +582,40 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
               const SizedBox(height: 16),
             ],
 
-            // 11.3  Control mode selector (server mode + manual mode only)
+            // 9.3  Control mode selector (server mode + manual mode only)
             if (!_isScheduleMode && !_isDirectMode) ...[
               ControlModeCard(
                 controlMode: _controlMode,
                 isDirectMode: _isDirectMode,
-                onModeSelected: (mode) =>
-                    setState(() => _controlMode = mode),
-                onDisabledTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content:
-                          Text('Schedule & Sensor require server connection'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                },
+                onModeSelected: (mode) => setState(() => _controlMode = mode),
+                onDisabledTap: () => _showMessage(
+                  'Schedule & Sensor require server connection',
+                  duration: const Duration(seconds: 2),
+                ),
               ),
               const SizedBox(height: 16),
             ],
 
-            // 11.4  Schedule card (when schedule mode is on)
-            if (_isScheduleMode)
+            // 9.4  Schedule card — either from the mode toggle or the
+            //      control-mode buttons
+            if (_isScheduleMode || _controlMode == 'schedule')
               ScheduleCard(
                 schedules: _schedules,
                 isSavingSchedule: _isSavingSchedule,
-                onAddPressed: _showAddScheduleDialog,
-                onRowTapped: (i) => _showAddScheduleDialog(editIndex: i),
+                onAddPressed: _showScheduleDialog,
+                onRowTapped: (i) => _showScheduleDialog(editIndex: i),
                 onRowDeleted: _deleteSchedule,
                 onSavePressed: _saveSchedule,
               ),
 
-            // 11.5  Manual mode → Valve control card
+            // 9.5  Manual mode → Valve control card
             if (!_isScheduleMode && _controlMode == 'manual')
               ValveControlCard(
                 valveControlEnabled: _valveControlEnabled,
                 onValveControlEnabledChanged: (v) =>
                     setState(() => _valveControlEnabled = v),
-                isOpen: _isValveOpen(),
-                actualPosition: _getActualPosition(),
+                isOpen: _isValveOpen,
+                actualPosition: _actualPosition,
                 isUpdating: _isUpdating,
                 onOpenCloseToggled: (open) =>
                     _sendControlCommand(open ? 'Open' : 'Closed'),
@@ -1406,31 +645,22 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                   _userIsEditingAngle = false;
                   _sendAngleCommand(angle);
                 },
-                waitingForConfirmation: _waitingForConfirmation,
-                pendingTargetAngle: _pendingTargetAngle,
-                confirmationCountdown: _confirmationCountdown,
+                waitingForConfirmation: _confirmation.isWaiting,
+                pendingTargetAngle: _confirmation.targetAngle,
+                confirmationCountdown: _confirmation.countdown,
               ),
 
-            // 11.6  Schedule card (selected from control-mode buttons)
-            if (!_isScheduleMode && _controlMode == 'schedule')
-              ScheduleCard(
-                schedules: _schedules,
-                isSavingSchedule: _isSavingSchedule,
-                onAddPressed: _showAddScheduleDialog,
-                onRowTapped: (i) => _showAddScheduleDialog(editIndex: i),
-                onRowDeleted: _deleteSchedule,
-                onSavePressed: _saveSchedule,
-              ),
-
-            // 11.7  Sensor card (placeholder)
+            // 9.6  Sensor card (placeholder)
             if (!_isScheduleMode && _controlMode == 'sensor')
               const SensorCard(),
 
             const SizedBox(height: 16),
 
-            // 11.8  Direct-mode action buttons
+            // 9.7  Direct-mode action buttons
             if (_isDirectMode) ...[
-              ChangeWifiButton(onPressed: _showWifiCredentialsDialog),
+              ChangeWifiButton(
+                onPressed: () => showWifiCredentialsDialog(context),
+              ),
               const SizedBox(height: 12),
               MotorCalibrationButton(
                 onPressed: () {
