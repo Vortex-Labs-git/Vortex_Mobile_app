@@ -33,7 +33,7 @@ import 'auth_service.dart';
 class WebSocketService {
   // ---- Configuration ----
   static const String _wsHost = '82.29.161.52';
-  static const int _wsPort = 8085;
+  static const int _wsPort = 8084;
   static const Duration _reconnectDelay = Duration(seconds: 3);
   static const int _maxReconnectAttempts = 5;
   static const Duration _connectTimeout = Duration(seconds: 5);

@@ -40,7 +40,7 @@
 |---|---|---|
 | **Network** | Phone → Internet → Cloud Server → MQTT → ESP32 | Phone → Valve's WiFi hotspot → ESP32 |
 | **Service used** | WebSocketService | EspDirectService |
-| **Connection** | ws://82.29.161.52:8085 | ws://192.168.4.1:80/ws |
+| **Connection** | ws://82.29.161.52:8084 | ws://192.168.4.1:80/ws |
 | **Auth method** | JWT token in header | Passkey "12345" in message |
 | **Data updates** | Server pushes every 2 seconds | App polls every 2 seconds |
 | **Who sends commands** | REST API (control_device.php) | EspDirectService (direct to valve) |

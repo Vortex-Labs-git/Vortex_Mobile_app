@@ -11,7 +11,7 @@
 ```
                     ┌─────────────────────┐
                     │   PHP Ratchet Server │
-                    │   82.29.161.52:8085  │
+                    │   82.29.161.52:8084  │
                     └──────────┬──────────┘
                                │
                     WebSocket (persistent connection)
@@ -49,7 +49,7 @@ The app **never sends valve commands** over WebSocket. WebSocket is **read-only*
 
 ```dart
 _wsHost = '82.29.161.52'        // Server IP address
-_wsPort = 8085                   // WebSocket port (PHP Ratchet server)
+_wsPort = 8084                   // WebSocket port (PHP Ratchet server)
 _reconnectDelay = 3 seconds      // Wait time between reconnect attempts
 _maxReconnectAttempts = 5         // Give up after 5 failed reconnects
 _connectTimeout = 5 seconds      // Max wait for initial connection
@@ -218,7 +218,7 @@ The internal method that performs the actual WebSocket connection using a specif
 **How it works step by step:**
 
 1. Create `IOWebSocketChannel.connect()` with:
-   - URL: `ws://82.29.161.52:8085`
+   - URL: `ws://82.29.161.52:8084`
    - Header: `Authorization: Bearer <token>`
 2. Await `_channel.ready` with 5-second timeout
    - If times out → throws `TimeoutException` (caught by `connect()`)
