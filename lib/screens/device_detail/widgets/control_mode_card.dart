@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../theme/glass_theme.dart';
+
+import '../../../widgets/glass/glass.dart';
+
 // =============================================================================
 // CONTROL MODE CARD
 // =============================================================================
@@ -25,7 +29,8 @@ class ControlModeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return GlassCard(
+      padding: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -100,21 +105,27 @@ class ControlModeCard extends StatelessWidget {
           width: 80,
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF3F51B5) : Colors.grey[200],
+            // Selected chip stays solid so it reads as "pressed in" against
+            // the surrounding glass; unselected chips are another pane.
+            gradient: isSelected ? GlassTokens.accentGradient : null,
+            color: isSelected ? null : Colors.white.withValues(alpha: 0.45),
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: isSelected ? 0.35 : 0.65),
+            ),
           ),
           child: Column(
             children: [
               Icon(
                 isDisabled ? Icons.lock_outline : icon,
-                color: isSelected ? Colors.white : Colors.grey[600],
+                color: isSelected ? Colors.white : GlassTokens.textSecondary,
                 size: 28,
               ),
               const SizedBox(height: 4),
               Text(
                 label,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.grey[600],
+                  color: isSelected ? Colors.white : GlassTokens.textSecondary,
                   fontSize: 12,
                 ),
               ),

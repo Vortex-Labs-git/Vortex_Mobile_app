@@ -3,6 +3,9 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../theme/glass_theme.dart';
+import '../widgets/glass/glass.dart';
+
 import '../services/esp_direct_service.dart';
 
 /// Sensor Configuration Screen (ESP32 direct mode)
@@ -332,7 +335,7 @@ class _SensorConfigScreenState extends State<SensorConfigScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: isError ? Colors.red : Colors.green,
+        backgroundColor: isError ? GlassTokens.danger : GlassTokens.success,
       ),
     );
   }
@@ -345,11 +348,11 @@ class _SensorConfigScreenState extends State<SensorConfigScreen> {
   Widget build(BuildContext context) {
     final deviceName = widget.deviceData['name']?.toString() ?? 'Sensor Unit';
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Sensor Configuration'),
-        backgroundColor: Colors.green[700],
-        foregroundColor: Colors.white,
+    return GlassScaffold(
+      // Green-tinted chrome: this screen only exists in direct-to-device mode.
+      appBar: const GlassAppBar(
+        title: 'Sensor Configuration',
+        tint: GlassTokens.success,
       ),
       body: SafeArea(
         child: _isLoadingInitial
@@ -358,7 +361,7 @@ class _SensorConfigScreenState extends State<SensorConfigScreen> {
                 ? Center(
                     child: Text(
                       'No sensor configuration received.',
-                      style: TextStyle(color: Colors.grey[600]),
+                      style: TextStyle(color: GlassTokens.textMuted),
                     ),
                   )
                 : SingleChildScrollView(
@@ -372,7 +375,7 @@ class _SensorConfigScreenState extends State<SensorConfigScreen> {
                           style: Theme.of(context)
                               .textTheme
                               .titleMedium
-                              ?.copyWith(color: Colors.grey[700]),
+                              ?.copyWith(color: GlassTokens.textSecondary),
                         ),
                         const SizedBox(height: 16),
 
@@ -400,7 +403,7 @@ class _SensorConfigScreenState extends State<SensorConfigScreen> {
                                 : const Icon(Icons.save),
                             label: Text(_isSaving ? 'Saving...' : 'save'),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green[700],
+                              backgroundColor: GlassTokens.success,
                               foregroundColor: Colors.white,
                               padding:
                                   const EdgeInsets.symmetric(vertical: 14),
@@ -425,7 +428,8 @@ class _SensorConfigScreenState extends State<SensorConfigScreen> {
     final String header =
         'Sensor ${(index + 1).toString().padLeft(2, '0')}';
 
-    return Card(
+    return GlassCard(
+      padding: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -445,13 +449,13 @@ class _SensorConfigScreenState extends State<SensorConfigScreen> {
                 if (entry.locked)
                   Row(
                     children: [
-                      Icon(Icons.lock, size: 14, color: Colors.grey[500]),
+                      Icon(Icons.lock, size: 14, color: GlassTokens.textMuted),
                       const SizedBox(width: 4),
                       Text(
                         'In-build',
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey[500],
+                          color: GlassTokens.textMuted,
                           fontStyle: FontStyle.italic,
                         ),
                       ),
@@ -467,7 +471,7 @@ class _SensorConfigScreenState extends State<SensorConfigScreen> {
                 const SizedBox(
                   width: 110,
                   child: Text('Sensor type',
-                      style: TextStyle(color: Colors.grey)),
+                      style: TextStyle(color: GlassTokens.textMuted)),
                 ),
                 Expanded(
                   child: entry.locked
@@ -499,7 +503,7 @@ class _SensorConfigScreenState extends State<SensorConfigScreen> {
                 const SizedBox(
                   width: 110,
                   child: Text('Sensor name',
-                      style: TextStyle(color: Colors.grey)),
+                      style: TextStyle(color: GlassTokens.textMuted)),
                 ),
                 Expanded(
                   child: entry.locked
@@ -525,19 +529,16 @@ class _SensorConfigScreenState extends State<SensorConfigScreen> {
   // ── Small UI helpers ────────────────────────────────────────────
 
   Widget _buildReadOnlyBox(String value) {
-    return Container(
+    return GlassSurface(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[300]!),
-      ),
+      borderRadius: BorderRadius.circular(GlassTokens.radiusSm),
+      showShadow: false,
       child: Text(
         value.isNotEmpty ? value : '—',
-        style: TextStyle(
+        style: const TextStyle(
           fontSize: 14,
-          color: Colors.grey[600],
+          color: GlassTokens.textSecondary,
           fontWeight: FontWeight.w500,
         ),
       ),
@@ -549,20 +550,20 @@ class _SensorConfigScreenState extends State<SensorConfigScreen> {
       hintText: hint,
       isDense: true,
       filled: true,
-      fillColor: Colors.grey[50],
+      fillColor: Colors.white.withValues(alpha: 0.55),
       contentPadding:
           const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: Colors.grey[300]!),
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.75)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: Colors.grey[300]!),
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.75)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: Colors.green[700]!, width: 2),
+        borderSide: BorderSide(color: GlassTokens.success, width: 2),
       ),
     );
   }

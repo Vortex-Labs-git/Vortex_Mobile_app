@@ -6,6 +6,7 @@ import '../../controllers/device_repository.dart';
 import '../../controllers/esp_session.dart';
 import '../../controllers/network_watcher.dart';
 import '../../models/device.dart';
+import '../../theme/glass_theme.dart';
 import '../device_detail/device_detail_screen.dart';
 import '../device_detail/sensor_detail_screen.dart';
 import 'widgets/connection_status_bar.dart';
@@ -94,9 +95,9 @@ class _HomeScreenState extends State<HomeScreen> {
     switch (status) {
       case DeviceStatus.online:
       case DeviceStatus.espConnected:
-        return Colors.green;
+        return GlassTokens.success;
       case DeviceStatus.offline:
-        return Colors.red;
+        return GlassTokens.danger;
     }
   }
 
@@ -140,32 +141,42 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: _repo.isLoading
-          ? const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Loading devices...',
-                      style: TextStyle(color: Colors.grey)),
-                ],
-              ),
-            )
-          : _repo.errorMessage != null && _repo.devices.isEmpty
-              ? ErrorView(
-                  message: _repo.errorMessage!,
-                  onRetry: () => DeviceRepository.instance.retry(),
-                )
-              : _repo.devices.isEmpty
-                  ? const EmptyView()
-                  : _buildDeviceList(),
-    );
+    // No Scaffold and no background: this is a tab inside MainScreen's
+    // GlassScaffold, and the gradient backdrop has to show through.
+    if (_repo.isLoading) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text(
+              'Loading devices...',
+              style: TextStyle(color: GlassTokens.textSecondary),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_repo.errorMessage != null && _repo.devices.isEmpty) {
+      return ErrorView(
+        message: _repo.errorMessage!,
+        onRetry: () => DeviceRepository.instance.retry(),
+      );
+    }
+
+    if (_repo.devices.isEmpty) return const EmptyView();
+
+    return _buildDeviceList();
   }
 
   Widget _buildDeviceList() {
+    // With extendBody on the shell Scaffold, the bottom inset already covers
+    // the translucent nav bar — add it so the last card clears the bar while
+    // the list still scrolls underneath it.
+    final double bottomInset = MediaQuery.paddingOf(context).bottom;
+
     return Column(
       children: [
         ConnectionStatusBar(
@@ -175,6 +186,8 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         Expanded(
           child: RefreshIndicator(
+            color: GlassTokens.primary,
+            backgroundColor: Colors.white.withValues(alpha: 0.9),
             onRefresh: () async {
               // WiFi half first (may trigger EspSession via the watcher),
               // then the server half.
@@ -182,7 +195,7 @@ class _HomeScreenState extends State<HomeScreen> {
               await DeviceRepository.instance.refresh();
             },
             child: ListView.builder(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.fromLTRB(16, 4, 16, 16 + bottomInset),
               itemCount: _repo.devices.length,
               itemBuilder: (context, index) {
                 final device = _repo.devices[index];

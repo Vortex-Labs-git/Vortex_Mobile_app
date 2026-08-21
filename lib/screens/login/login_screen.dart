@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
+import '../../widgets/glass/glass.dart';
 import 'widgets/login_icon.dart';
 import 'widgets/login_error.dart';
 import 'widgets/login_username_field.dart';
@@ -102,53 +103,52 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Center(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.fromLTRB(
+          24,
+          24,
+          24,
+          // Clear the translucent bottom nav this tab sits behind.
+          24 + MediaQuery.paddingOf(context).bottom,
+        ),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 400),
-          child: Card(
-            elevation: 8,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // 4.1  Header icon
-                  const LoginIcon(),
+          child: GlassCard(
+            padding: const EdgeInsets.all(30),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 4.1  Header icon
+                const LoginIcon(),
 
-                  const SizedBox(height: 32),
+                const SizedBox(height: 28),
 
-                  // 4.2  Error banner (only when there is an error)
-                  if (_errorMessage != null)
-                    LoginError(message: _errorMessage!),
+                // 4.2  Error banner (only when there is an error)
+                if (_errorMessage != null) LoginError(message: _errorMessage!),
 
-                  // 4.3  Username field
-                  LoginUsernameField(controller: _usernameController),
+                // 4.3  Username field
+                LoginUsernameField(controller: _usernameController),
 
-                  const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-                  // 4.4  Password field
-                  LoginPasswordField(
-                    controller: _passwordController,
-                    onSubmitted: _handleLogin,
-                  ),
+                // 4.4  Password field
+                LoginPasswordField(
+                  controller: _passwordController,
+                  onSubmitted: _handleLogin,
+                ),
 
-                  const SizedBox(height: 24),
+                const SizedBox(height: 24),
 
-                  // 4.5  Sign In button
-                  LoginButton(
-                    isLoading: _isLoading,
-                    onPressed: _handleLogin,
-                  ),
+                // 4.5  Sign In button
+                LoginButton(
+                  isLoading: _isLoading,
+                  onPressed: _handleLogin,
+                ),
 
-                  const SizedBox(height: 16),
+                const SizedBox(height: 8),
 
-                  // 4.6  Forgot password link
-                  const ForgotPasswordButton(),
-                ],
-              ),
+                // 4.6  Forgot password link
+                const ForgotPasswordButton(),
+              ],
             ),
           ),
         ),

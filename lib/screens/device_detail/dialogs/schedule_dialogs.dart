@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../theme/glass_theme.dart';
+import '../../../widgets/glass/glass.dart';
+
 import '../../../models/valve_device.dart';
 import '../utils/schedule_utils.dart';
 
@@ -23,7 +26,7 @@ Future<ScheduleEntry?> showScheduleEntryDialog(
       : const TimeOfDay(hour: 8, minute: 20);
   double angle = (existing?.angle ?? 90).toDouble();
 
-  return showDialog<ScheduleEntry>(
+  return showGlassDialog<ScheduleEntry>(
     context: context,
     builder: (dialogContext) {
       return StatefulBuilder(
@@ -46,9 +49,7 @@ Future<ScheduleEntry?> showScheduleEntryDialog(
                 if (picked != null) onPicked(picked);
               },
               child: InputDecorator(
-                decoration: InputDecoration(
-                  labelText: label,
-                  border: const OutlineInputBorder(),
+                decoration: glassInputDecoration(labelText: label).copyWith(
                   isDense: true,
                 ),
                 child: Row(
@@ -63,18 +64,16 @@ Future<ScheduleEntry?> showScheduleEntryDialog(
             );
           }
 
-          return AlertDialog(
-            title: Text(isEditing ? 'Edit Schedule' : 'Add Schedule'),
-            content: SingleChildScrollView(
-              child: Column(
+          return GlassDialog(
+            title: isEditing ? 'Edit Schedule' : 'Add Schedule',
+            icon: Icons.schedule,
+            content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Day
                   DropdownButtonFormField<String>(
                     value: selectedDay,
-                    decoration: const InputDecoration(
-                      labelText: 'Day',
-                      border: OutlineInputBorder(),
+                    decoration: glassInputDecoration(labelText: 'Day').copyWith(
                       isDense: true,
                     ),
                     items: kScheduleDayOptions
@@ -94,7 +93,7 @@ Future<ScheduleEntry?> showScheduleEntryDialog(
                         child: timeField(
                           label: 'From',
                           value: startTime,
-                          iconColor: Colors.green[600]!,
+                          iconColor: GlassTokens.success,
                           onPicked: (v) => setDialogState(() => startTime = v),
                         ),
                       ),
@@ -103,7 +102,7 @@ Future<ScheduleEntry?> showScheduleEntryDialog(
                         child: timeField(
                           label: 'To',
                           value: endTime,
-                          iconColor: Colors.red[600]!,
+                          iconColor: GlassTokens.danger,
                           onPicked: (v) => setDialogState(() => endTime = v),
                         ),
                       ),
@@ -127,27 +126,31 @@ Future<ScheduleEntry?> showScheduleEntryDialog(
                     max: 90,
                     divisions: 18,              // 5° steps
                     label: '${angle.round()}°',
-                    activeColor: const Color(0xFF3F51B5),
+                    activeColor: GlassTokens.primary,
                     onChanged: (v) => setDialogState(() => angle = v),
                   ),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('0° closed',
-                          style: TextStyle(fontSize: 11, color: Colors.grey[600])),
-                      Text('90° open',
-                          style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                      const Text('0° closed',
+                          style: TextStyle(
+                              fontSize: 11, color: GlassTokens.textMuted)),
+                      const Text('90° open',
+                          style: TextStyle(
+                              fontSize: 11, color: GlassTokens.textMuted)),
                     ],
                   ),
                 ],
-              ),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext),
                 child: const Text('Cancel'),
               ),
-              ElevatedButton(
+              GlassButton(
+                label: isEditing ? 'Update' : 'Add',
+                fullWidth: false,
+                height: 44,
                 onPressed: () {
                   final start = formatScheduleTime(startTime);
                   final end = formatScheduleTime(endTime);
@@ -171,11 +174,6 @@ Future<ScheduleEntry?> showScheduleEntryDialog(
                     ),
                   );
                 },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3F51B5),
-                  foregroundColor: Colors.white,
-                ),
-                child: Text(isEditing ? 'Update' : 'Add'),
               ),
             ],
           );
@@ -190,24 +188,27 @@ Future<bool> showDeleteScheduleDialog(
   BuildContext context,
   ScheduleEntry entry,
 ) async {
-  final confirmed = await showDialog<bool>(
+  final confirmed = await showGlassDialog<bool>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: const Text('Delete Schedule'),
+    builder: (dialogContext) => GlassDialog(
+      title: 'Delete Schedule',
+      icon: Icons.delete_outline,
+      tint: GlassTokens.danger,
       content: Text(
-          'Delete "${entry.day} — ${entry.timeRange} at ${entry.angle}°"?'),
+        'Delete "${entry.day} — ${entry.timeRange} at ${entry.angle}°"?',
+        style: const TextStyle(color: GlassTokens.textSecondary, fontSize: 15),
+      ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(dialogContext, false),
           child: const Text('Cancel'),
         ),
-        ElevatedButton(
+        GlassButton(
+          label: 'Delete',
+          color: GlassTokens.danger,
+          fullWidth: false,
+          height: 44,
           onPressed: () => Navigator.pop(dialogContext, true),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.red,
-            foregroundColor: Colors.white,
-          ),
-          child: const Text('Delete'),
         ),
       ],
     ),

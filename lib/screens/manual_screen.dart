@@ -1,41 +1,67 @@
 import 'package:flutter/material.dart';
 
+import '../theme/glass_theme.dart';
+import '../widgets/glass/glass.dart';
+
 class ManualScreen extends StatelessWidget {
   const ManualScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.white,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 8),
+    // Transparent: this tab sits on MainScreen's gradient backdrop.
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        20,
+        20,
+        24 + MediaQuery.paddingOf(context).bottom,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 8),
 
-            // ── Header ──
-            const Center(
-              child: Column(
-                children: [
-                  Icon(Icons.menu_book_rounded, size: 48, color: Color(0xFF3F51B5)),
-                  SizedBox(height: 12),
-                  Text(
-                    'User Manual',
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF3F51B5),
+          // ── Header ──
+          Center(
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.45),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.7),
+                      width: 1.5,
                     ),
+                    boxShadow: GlassTokens.paneShadow(y: 8, blurRadius: 22),
                   ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Vortex Smart Valve — Complete Guide',
-                    style: TextStyle(fontSize: 14, color: Colors.grey),
+                  child: const Icon(
+                    Icons.menu_book_rounded,
+                    size: 40,
+                    color: GlassTokens.primary,
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'User Manual',
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                    color: GlassTokens.primary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Vortex Smart Valve — Complete Guide',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: GlassTokens.textMuted,
+                  ),
+                ),
+              ],
             ),
+          ),
 
             const SizedBox(height: 28),
 
@@ -216,13 +242,12 @@ class ManualScreen extends StatelessWidget {
             const Center(
               child: Text(
                 '© 2025 Vortex Labs Official',
-                style: TextStyle(color: Colors.grey, fontSize: 13),
+                style: TextStyle(color: GlassTokens.textMuted, fontSize: 13),
               ),
             ),
 
             const SizedBox(height: 20),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -233,20 +258,24 @@ class ManualScreen extends StatelessWidget {
     required String title,
     required List<Widget> children,
   }) {
-    return Container(
-      width: double.infinity,
+    return GlassCard(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F5FA),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE0E0E8)),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, color: const Color(0xFF3F51B5), size: 26),
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: GlassTokens.primary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(GlassTokens.radiusSm),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.65),
+                  ),
+                ),
+                child: Icon(icon, color: GlassTokens.primary, size: 21),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -254,7 +283,7 @@ class ManualScreen extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 19,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF3F51B5),
+                    color: GlassTokens.primary,
                   ),
                 ),
               ),
@@ -278,8 +307,15 @@ class ManualScreen extends StatelessWidget {
             width: 26,
             height: 26,
             decoration: BoxDecoration(
-              color: const Color(0xFF3F51B5),
+              gradient: GlassTokens.accentGradient,
               borderRadius: BorderRadius.circular(13),
+              boxShadow: [
+                BoxShadow(
+                  color: GlassTokens.primary.withValues(alpha: 0.30),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
             ),
             child: Center(
               child: Text(
@@ -298,7 +334,8 @@ class ManualScreen extends StatelessWidget {
               padding: const EdgeInsets.only(top: 3),
               child: Text(
                 text,
-                style: const TextStyle(fontSize: 14, color: Color(0xFF444444), height: 1.4),
+                style: const TextStyle(
+                  fontSize: 14, color: GlassTokens.textSecondary, height: 1.4),
               ),
             ),
           ),
@@ -316,13 +353,14 @@ class ManualScreen extends StatelessWidget {
         children: [
           const Padding(
             padding: EdgeInsets.only(top: 7),
-            child: Icon(Icons.circle, size: 6, color: Color(0xFF3F51B5)),
+            child: Icon(Icons.circle, size: 6, color: GlassTokens.primary),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(fontSize: 14, color: Color(0xFF444444), height: 1.4),
+              style: const TextStyle(
+                  fontSize: 14, color: GlassTokens.textSecondary, height: 1.4),
             ),
           ),
         ],
@@ -339,31 +377,39 @@ class ManualScreen extends StatelessWidget {
         style: const TextStyle(
           fontSize: 15,
           fontWeight: FontWeight.w600,
-          color: Color(0xFF333333),
+          color: GlassTokens.textPrimary,
         ),
       ),
     );
   }
 
   // ── Note/tip box ──
+  // Amber-tinted glass so tips read as a distinct layer inside the card
+  // without going back to a flat opaque box.
   static Widget _buildNote(String text) {
-    return Container(
+    return GlassCard(
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF8E1),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFFFE082)),
-      ),
+      borderRadius: BorderRadius.circular(GlassTokens.radiusSm),
+      tint: GlassTokens.warning,
+      tintStrength: 0.22,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.lightbulb_outline, color: Color(0xFFF9A825), size: 20),
+          const Icon(
+            Icons.lightbulb_outline,
+            color: Color(0xFFB45309),
+            size: 20,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(fontSize: 13, color: Color(0xFF6D4C00), height: 1.4),
+              style: const TextStyle(
+                fontSize: 13,
+                color: Color(0xFF6D4C00),
+                height: 1.4,
+              ),
             ),
           ),
         ],
@@ -375,11 +421,14 @@ class ManualScreen extends StatelessWidget {
   static Widget _buildContactRow(IconData icon, String text) {
     return Row(
       children: [
-        Icon(icon, color: const Color(0xFF3F51B5), size: 20),
+        Icon(icon, color: GlassTokens.primary, size: 20),
         const SizedBox(width: 12),
         Text(
           text,
-          style: const TextStyle(fontSize: 14, color: Color(0xFF444444)),
+          style: const TextStyle(
+            fontSize: 14,
+            color: GlassTokens.textSecondary,
+          ),
         ),
       ],
     );

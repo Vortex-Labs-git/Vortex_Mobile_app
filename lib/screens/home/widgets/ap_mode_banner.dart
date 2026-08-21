@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../../../theme/glass_theme.dart';
+import '../../../widgets/glass/glass.dart';
+
 // =============================================================================
 // AP MODE BANNER
 // =============================================================================
-// Light-blue banner shown when the phone is connected to a Vortex_VA hotspot.
+// Banner shown when the phone is connected to a Vortex_VA hotspot.
 // Currently DISABLED in build() but kept here in case it's re-enabled.
+//
+// Tinted glass: green once the direct session is up, indigo while the hotspot
+// is merely detected.
 //
 // Reads ESP32 connection state through the parent (passed in via constructor)
 // rather than calling EspDirectService.instance directly, so this widget stays
@@ -25,23 +31,31 @@ class ApModeBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
+    final Color tint =
+        espConnected ? GlassTokens.success : GlassTokens.primary;
+
+    return GlassCard(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.blue.shade50,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.blue.shade200),
-      ),
+      padding: const EdgeInsets.all(14),
+      tint: tint,
+      tintStrength: 0.18,
       child: Row(
         children: [
           // ─────────────────────────────────────────────────────────────
           // Left icon (check-circle when connected, remote when not)
           // ─────────────────────────────────────────────────────────────
-          Icon(
-            espConnected ? Icons.check_circle : Icons.settings_remote,
-            color: espConnected ? Colors.green : const Color(0xFF3F51B5),
+          Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: tint.withValues(alpha: 0.15),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.65)),
+            ),
+            child: Icon(
+              espConnected ? Icons.check_circle : Icons.settings_remote,
+              color: tint,
+              size: 20,
+            ),
           ),
 
           const SizedBox(width: 12),
@@ -58,8 +72,9 @@ class ApModeBanner extends StatelessWidget {
                       ? 'Connected to valve directly'
                       : 'Valve WiFi detected',
                   style: const TextStyle(
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w700,
                     fontSize: 14,
+                    color: GlassTokens.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -67,7 +82,10 @@ class ApModeBanner extends StatelessWidget {
                   espConnected
                       ? 'Device: ${espConnectedDeviceId ?? "Identifying..."}'
                       : 'Tap a device to set up WiFi or control directly',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: GlassTokens.textSecondary,
+                  ),
                 ),
               ],
             ),

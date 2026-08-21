@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../widgets/glass/glass.dart';
+
 // =============================================================================
 // MOTOR CALIBRATION BUTTON
 // =============================================================================
@@ -15,25 +17,10 @@ class MotorCalibrationButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: onPressed,
-        icon: const Icon(Icons.tune),
-        label: const Text('Motor Calibration'),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF3F51B5),
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          textStyle: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-      ),
+    return GlassGhostButton(
+      label: 'Motor Calibration',
+      icon: Icons.tune,
+      onPressed: onPressed,
     );
   }
 }

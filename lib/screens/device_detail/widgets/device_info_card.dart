@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../theme/glass_theme.dart';
+
+import '../../../widgets/glass/glass.dart';
+
 // =============================================================================
 // DEVICE INFO CARD
 // =============================================================================
@@ -27,9 +31,10 @@ class DeviceInfoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final String statusText =
         isDirectMode ? 'Direct Connected' : (isOnline ? 'online' : 'offline');
-    final Color statusColor = isOnline ? Colors.green : Colors.red;
+    final Color statusColor = isOnline ? GlassTokens.success : GlassTokens.danger;
 
-    return Card(
+    return GlassCard(
+      padding: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -40,7 +45,7 @@ class DeviceInfoCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Product Type', style: TextStyle(color: Colors.grey)),
+                const Text('Product Type', style: TextStyle(color: GlassTokens.textMuted)),
                 Text(
                   productType,
                   style: const TextStyle(fontWeight: FontWeight.w500),
@@ -56,14 +61,14 @@ class DeviceInfoCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Name', style: TextStyle(color: Colors.grey)),
+                const Text('Name', style: TextStyle(color: GlassTokens.textMuted)),
                 Row(
                   children: [
                     TextButton(
                       onPressed: onEditName,
                       child: const Text(
                         'Edit',
-                        style: TextStyle(color: Colors.blue),
+                        style: TextStyle(color: GlassTokens.primary),
                       ),
                     ),
                     Text(
@@ -85,7 +90,7 @@ class DeviceInfoCard extends StatelessWidget {
               children: [
                 const Text(
                   'Connection Status',
-                  style: TextStyle(color: Colors.grey),
+                  style: TextStyle(color: GlassTokens.textMuted),
                 ),
                 Row(
                   children: [

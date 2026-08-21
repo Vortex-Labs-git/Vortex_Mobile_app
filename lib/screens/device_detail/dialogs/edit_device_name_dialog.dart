@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../theme/glass_theme.dart';
+import '../../../widgets/glass/glass.dart';
+
 // =============================================================================
 // EDIT DEVICE NAME DIALOG
 // =============================================================================
@@ -18,17 +21,18 @@ Future<String?> showEditDeviceNameDialog(
   final controller = TextEditingController(text: currentName);
   bool isSaving = false;
 
-  return showDialog<String>(
+  return showGlassDialog<String>(
     context: context,
     builder: (dialogContext) => StatefulBuilder(
-      builder: (dialogContext, setDialogState) => AlertDialog(
-        title: const Text('Edit Device Name'),
+      builder: (dialogContext, setDialogState) => GlassDialog(
+        title: 'Edit Device Name',
+        icon: Icons.drive_file_rename_outline,
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(
+          decoration: glassInputDecoration(
             labelText: 'Device Name',
-            border: OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.label_outline),
           ),
         ),
         actions: [
@@ -36,7 +40,11 @@ Future<String?> showEditDeviceNameDialog(
             onPressed: isSaving ? null : () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
-          ElevatedButton(
+          GlassButton(
+            label: 'Save',
+            fullWidth: false,
+            height: 44,
+            isLoading: isSaving,
             onPressed: isSaving
                 ? null
                 : () async {
@@ -54,17 +62,9 @@ Future<String?> showEditDeviceNameDialog(
                       setDialogState(() => isSaving = false);
                     }
                   },
-            child: isSaving
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
-                  )
-                : const Text('Save'),
           ),
         ],
       ),
     ),
-  ).whenComplete(controller.dispose);
+  );
 }

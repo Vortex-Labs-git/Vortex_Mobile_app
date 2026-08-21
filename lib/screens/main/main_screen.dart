@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../theme/glass_theme.dart';
 import '../../utils/constants.dart';
+import '../../widgets/glass/glass.dart';
 
 // Tab screens
 import '../home/home_screen.dart';
@@ -53,37 +55,37 @@ class _MainScreenState extends State<MainScreen> {
   void _showAddDeviceDialog(BuildContext context) {
     final nameController = TextEditingController();
 
-    showDialog(
+    showGlassDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text(AppStrings.addDevice),
+      builder: (dialogContext) => GlassDialog(
+        title: AppStrings.addDevice,
+        icon: Icons.add_circle_outline,
         content: TextField(
           controller: nameController,
-          decoration: const InputDecoration(
+          autofocus: true,
+          decoration: glassInputDecoration(
             labelText: 'Device Name',
             hintText: 'e.g., Main Valve',
-            border: OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.label_outline),
           ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
-          ElevatedButton(
+          GlassButton(
+            label: 'Add',
+            fullWidth: false,
+            height: 44,
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('Device "${nameController.text}" added!'),
                 ),
               );
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Add'),
           ),
         ],
       ),
@@ -96,7 +98,10 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    // GlassScaffold paints the gradient backdrop and lets the tab content
+    // scroll under the translucent app bar and nav bar. Tab screens are
+    // therefore transparent and must not add their own background.
+    return GlassScaffold(
       // 3.1  Top app bar (person icon jumps to the User tab)
       appBar: MainAppBar(
         onPersonPressed: () => setState(() => _currentIndex = 1),

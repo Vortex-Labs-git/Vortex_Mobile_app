@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../theme/glass_theme.dart';
+import '../widgets/glass/glass.dart';
+
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
@@ -48,40 +51,59 @@ class AboutScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.white,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 8),
+    // Transparent: this tab sits on MainScreen's gradient backdrop.
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        20,
+        20,
+        30 + MediaQuery.paddingOf(context).bottom,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 8),
 
-            // ── Logo ──
-            Center(
+          // ── Logo, seated in a glass ring ──
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.45),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.7),
+                  width: 1.5,
+                ),
+                boxShadow: GlassTokens.paneShadow(y: 12, blurRadius: 30),
+              ),
               child: ClipOval(
                 child: Image.asset(
                   'assets/images/logo.jpeg',
-                  width: 160,
-                  height: 160,
+                  width: 150,
+                  height: 150,
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) => Container(
-                    width: 160,
-                    height: 160,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFE0E0E8),
+                    width: 150,
+                    height: 150,
+                    decoration: BoxDecoration(
+                      color: GlassTokens.primary.withValues(alpha: 0.10),
                       shape: BoxShape.circle,
                     ),
                     child: const Center(
                       child: Text(
                         'logo',
-                        style: TextStyle(fontSize: 18, color: Colors.black87),
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: GlassTokens.textSecondary,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
             ),
+          ),
 
             const SizedBox(height: 28),
 
@@ -137,8 +159,7 @@ class AboutScreen extends StatelessWidget {
             _buildValuesCard(),
 
             const SizedBox(height: 30),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -148,27 +169,21 @@ class AboutScreen extends StatelessWidget {
     required String title,
     required String body,
   }) {
-    return Container(
-      width: double.infinity,
+    return GlassCard(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F5FA),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE0E0E8)),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, color: const Color(0xFF3F51B5), size: 28),
+              _cardIcon(icon),
               const SizedBox(width: 12),
               Text(
                 title,
                 style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF3F51B5),
+                  color: GlassTokens.primary,
                 ),
               ),
             ],
@@ -178,7 +193,7 @@ class AboutScreen extends StatelessWidget {
             body,
             style: const TextStyle(
               fontSize: 15,
-              color: Color(0xFF444444),
+              color: GlassTokens.textSecondary,
               height: 1.5,
             ),
           ),
@@ -187,28 +202,36 @@ class AboutScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildValuesCard() {
+  /// Small tinted tile behind each section icon — keeps the headings anchored
+  /// when the card is translucent.
+  static Widget _cardIcon(IconData icon) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(9),
       decoration: BoxDecoration(
-        color: const Color(0xFFF5F5FA),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE0E0E8)),
+        color: GlassTokens.primary.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(GlassTokens.radiusSm),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.65)),
       ),
+      child: Icon(icon, color: GlassTokens.primary, size: 22),
+    );
+  }
+
+  Widget _buildValuesCard() {
+    return GlassCard(
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            children: const [
-              Icon(Icons.star_outline, color: Color(0xFF3F51B5), size: 28),
-              SizedBox(width: 12),
-              Text(
+            children: [
+              _cardIcon(Icons.star_outline),
+              const SizedBox(width: 12),
+              const Text(
                 'Our Values',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF3F51B5),
+                  color: GlassTokens.primary,
                 ),
               ),
             ],
@@ -219,7 +242,7 @@ class AboutScreen extends StatelessWidget {
             'who we are:',
             style: TextStyle(
               fontSize: 15,
-              color: Color(0xFF444444),
+              color: GlassTokens.textSecondary,
               height: 1.5,
             ),
           ),
@@ -235,7 +258,7 @@ class AboutScreen extends StatelessWidget {
                     child: Icon(
                       Icons.circle,
                       size: 6,
-                      color: Color(0xFF3F51B5),
+                      color: GlassTokens.primary,
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -244,7 +267,7 @@ class AboutScreen extends StatelessWidget {
                       text: TextSpan(
                         style: const TextStyle(
                           fontSize: 15,
-                          color: Color(0xFF444444),
+                          color: GlassTokens.textSecondary,
                           height: 1.5,
                         ),
                         children: [
@@ -252,7 +275,7 @@ class AboutScreen extends StatelessWidget {
                             text: '${v['title']} – ',
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF333333),
+                              color: GlassTokens.textPrimary,
                             ),
                           ),
                           TextSpan(text: v['body']),

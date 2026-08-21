@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../theme/glass_theme.dart';
+
+import '../../../widgets/glass/glass.dart';
+
 // =============================================================================
 // SENSOR CARD
 // =============================================================================
@@ -13,7 +17,8 @@ class SensorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return GlassCard(
+      padding: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -36,13 +41,13 @@ class SensorCard extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey[300]!),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.65)),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Center(
                 child: Text(
                   '+ Add sensor',
-                  style: TextStyle(color: Color(0xFF3F51B5)),
+                  style: TextStyle(color: GlassTokens.primary),
                 ),
               ),
             ),
@@ -107,7 +112,7 @@ class SensorCard extends StatelessWidget {
                 icon: const Icon(Icons.save),
                 label: const Text('save'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3F51B5),
+                  backgroundColor: GlassTokens.primary,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),

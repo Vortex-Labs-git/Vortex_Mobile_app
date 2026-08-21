@@ -1,5 +1,18 @@
 import 'package:flutter/material.dart';
 
+import '../../../theme/glass_theme.dart';
+import '../../../widgets/glass/glass.dart';
+
+// =============================================================================
+// DEVICE APP BAR
+// =============================================================================
+// Translucent app bar for the device screens, tinted green while the app is
+// talking to the valve directly over its own hotspot.
+//
+// Requires the screen to use GlassScaffold (extendBodyBehindAppBar) so there
+// is something behind the bar to blur.
+// =============================================================================
+
 class DeviceAppBar extends StatelessWidget implements PreferredSizeWidget {
   final bool isDirectMode;
   final bool wsConnected;
@@ -12,10 +25,9 @@ class DeviceAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppBar(
-      title: Text(isDirectMode ? 'Direct Control' : 'Vortex Labs'),
-      backgroundColor: isDirectMode ? Colors.green[700] : const Color(0xFF3F51B5),
-      foregroundColor: Colors.white,
+    return GlassAppBar(
+      title: isDirectMode ? 'Direct Control' : 'Vortex Labs',
+      tint: isDirectMode ? GlassTokens.success : null,
       actions: [
         Padding(
           padding: const EdgeInsets.only(right: 16),
@@ -23,7 +35,7 @@ class DeviceAppBar extends StatelessWidget implements PreferredSizeWidget {
             wsConnected
                 ? (isDirectMode ? Icons.settings_remote : Icons.wifi)
                 : Icons.wifi_off,
-            color: wsConnected ? Colors.greenAccent : Colors.red,
+            color: wsConnected ? GlassTokens.success : GlassTokens.danger,
           ),
         ),
       ],

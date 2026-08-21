@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../theme/glass_theme.dart';
+
+import '../../../widgets/glass/glass.dart';
+
 import '../../../models/valve_device.dart';
 
 // =============================================================================
@@ -38,7 +42,8 @@ class ScheduleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return GlassCard(
+      padding: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -56,7 +61,7 @@ class ScheduleCard extends StatelessWidget {
                 ),
                 Text(
                   '${schedules.length} entries',
-                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                  style: TextStyle(color: GlassTokens.textMuted, fontSize: 12),
                 ),
               ],
             ),
@@ -69,8 +74,11 @@ class ScheduleCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.grey[200],
+                color: GlassTokens.primary.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.6),
+                ),
               ),
               child: const Row(
                 children: [
@@ -110,7 +118,7 @@ class ScheduleCard extends StatelessWidget {
                   child: Text(
                     'No schedules added yet.\nTap + to add one.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey[500]),
+                    style: TextStyle(color: GlassTokens.textMuted),
                   ),
                 ),
               )
@@ -130,7 +138,7 @@ class ScheduleCard extends StatelessWidget {
                 icon: const Icon(Icons.add_circle_outline),
                 label: const Text('Add Schedule'),
                 style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF3F51B5),
+                  foregroundColor: GlassTokens.primary,
                 ),
               ),
             ),
@@ -156,10 +164,10 @@ class ScheduleCard extends StatelessWidget {
                     : const Icon(Icons.save),
                 label: Text(isSavingSchedule ? 'Saving...' : 'Save Schedule'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3F51B5),
+                  backgroundColor: GlassTokens.primary,
                   foregroundColor: Colors.white,
                   disabledBackgroundColor:
-                      const Color(0xFF3F51B5).withOpacity(0.6),
+                      GlassTokens.primary.withValues(alpha: 0.6),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
               ),
@@ -180,7 +188,9 @@ class ScheduleCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+          border: Border(
+            bottom: BorderSide(color: Colors.white.withValues(alpha: 0.55)),
+          ),
         ),
         child: Row(
           children: [
@@ -224,7 +234,7 @@ class ScheduleCard extends StatelessWidget {
               width: _deleteWidth,
               child: IconButton(
                 icon: const Icon(Icons.delete_outline, size: 18),
-                color: Colors.red[300],
+                color: GlassTokens.danger,
                 onPressed: () => onRowDeleted(index),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
@@ -239,8 +249,8 @@ class ScheduleCard extends StatelessWidget {
   /// Keeps the old table's colour language: green = open, red = closed,
   /// amber for anything in between.
   Color _angleColor(int angle) {
-    if (angle <= 0) return Colors.red[700]!;
-    if (angle >= 90) return Colors.green[700]!;
-    return Colors.orange[800]!;
+    if (angle <= 0) return GlassTokens.danger;
+    if (angle >= 90) return GlassTokens.success;
+    return GlassTokens.warning;
   }
 }

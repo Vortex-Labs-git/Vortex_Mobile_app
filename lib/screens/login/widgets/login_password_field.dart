@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../theme/glass_theme.dart';
+
 // =============================================================================
 // LOGIN PASSWORD FIELD
 // =============================================================================
@@ -30,23 +32,19 @@ class _LoginPasswordFieldState extends State<LoginPasswordField> {
     return TextField(
       controller: widget.controller,
       obscureText: _obscurePassword,
-      decoration: InputDecoration(
+      decoration: glassInputDecoration(
         labelText: 'Password',
         hintText: 'Enter your password',
         prefixIcon: const Icon(Icons.lock_outline),
         suffixIcon: IconButton(
           icon: Icon(
             _obscurePassword ? Icons.visibility : Icons.visibility_off,
+            color: GlassTokens.textMuted,
           ),
           onPressed: () {
             setState(() => _obscurePassword = !_obscurePassword);
           },
         ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        filled: true,
-        fillColor: Colors.grey.shade100,
       ),
       textInputAction: TextInputAction.done,
       onSubmitted: (_) => widget.onSubmitted(),

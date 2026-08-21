@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../services/esp_direct_service.dart';
+import '../../../theme/glass_theme.dart';
+import '../../../widgets/glass/glass.dart';
 
 // =============================================================================
 // WIFI CREDENTIALS DIALOG (Direct mode)
@@ -34,7 +36,7 @@ Future<void> showWifiCredentialsDialog(BuildContext context) {
     );
   }
 
-  return showDialog<void>(
+  return showGlassDialog<void>(
     context: context,
     builder: (dialogContext) => StatefulBuilder(
       builder: (dialogContext, setDialogState) {
@@ -50,7 +52,7 @@ Future<void> showWifiCredentialsDialog(BuildContext context) {
           if (!EspDirectService.instance.isAuthenticated) {
             showMessage(
               'Not connected to valve. Go back and reconnect.',
-              color: Colors.red,
+              color: GlassTokens.danger,
             );
             return;
           }
@@ -70,51 +72,51 @@ Future<void> showWifiCredentialsDialog(BuildContext context) {
             Navigator.pop(dialogContext);
             showMessage(
               'WiFi credentials sent! Valve will restart and connect to your home WiFi.',
-              color: Colors.green,
+              color: GlassTokens.success,
               duration: const Duration(seconds: 5),
             );
           });
         }
 
-        return AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.wifi, color: Color(0xFF3F51B5)),
-              SizedBox(width: 10),
-              Text('Set Home WiFi'),
-            ],
-          ),
+        return GlassDialog(
+          title: 'Set Home WiFi',
+          icon: Icons.wifi,
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
+              const Text(
                 'Enter your home WiFi credentials. The valve will restart and connect to this network.',
-                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: GlassTokens.textSecondary,
+                  height: 1.4,
+                ),
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: ssidController,
                 autofocus: true,
-                decoration: const InputDecoration(
+                decoration: glassInputDecoration(
                   labelText: 'WiFi Name (SSID)',
                   hintText: 'Enter your home WiFi name',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.wifi),
+                  prefixIcon: const Icon(Icons.wifi),
                 ),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: passwordController,
                 obscureText: obscurePassword,
-                decoration: InputDecoration(
+                decoration: glassInputDecoration(
                   labelText: 'WiFi Password',
                   hintText: 'Enter WiFi password',
-                  border: const OutlineInputBorder(),
                   prefixIcon: const Icon(Icons.lock),
                   suffixIcon: IconButton(
-                    icon: Icon(obscurePassword
-                        ? Icons.visibility
-                        : Icons.visibility_off),
+                    icon: Icon(
+                      obscurePassword
+                          ? Icons.visibility
+                          : Icons.visibility_off,
+                      color: GlassTokens.textMuted,
+                    ),
                     onPressed: () {
                       setDialogState(() => obscurePassword = !obscurePassword);
                     },
@@ -128,21 +130,14 @@ Future<void> showWifiCredentialsDialog(BuildContext context) {
               onPressed: isSending ? null : () => Navigator.pop(dialogContext),
               child: const Text('Cancel'),
             ),
-            ElevatedButton.icon(
+            GlassButton(
+              label: isSending ? 'Sending...' : 'Save & Connect',
+              icon: Icons.send,
+              color: GlassTokens.success,
+              fullWidth: false,
+              height: 44,
+              isLoading: isSending,
               onPressed: isSending ? null : send,
-              icon: isSending
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Icon(Icons.send),
-              label: Text(isSending ? 'Sending...' : 'Save & Connect'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-              ),
             ),
           ],
         );

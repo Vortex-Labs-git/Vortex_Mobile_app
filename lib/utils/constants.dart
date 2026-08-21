@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
 
+import '../theme/glass_theme.dart';
+
+/// Superseded by [GlassTokens] (theme/glass_theme.dart), which is the source
+/// of truth for the frosted-glass look. These aliases stay so older code keeps
+/// compiling and keeps matching the new palette — prefer GlassTokens in new
+/// code, and note that surfaces are now translucent panes (see
+/// widgets/glass/), not the flat [background] / [cardBackground] fills below.
 class AppColors {
-  static const Color primary = Color(0xFF3F51B5);
-  static const Color primaryDark = Color(0xFF303F9F);
-  static const Color primaryLight = Color(0xFFC5CAE9);
-  static const Color accent = Color(0xFF448AFF);
-  static const Color success = Color(0xFF4CAF50);
-  static const Color warning = Color(0xFFFF9800);
-  static const Color error = Color(0xFFF44336);
-  static const Color offline = Color(0xFF9E9E9E);
-  static const Color background = Color(0xFFF5F5F5);
+  static const Color primary = GlassTokens.primary;
+  static const Color primaryDark = Color(0xFF0B5A54);
+  static const Color primaryLight = Color(0xFFBFE0DC);
+  static const Color accent = GlassTokens.primaryBright;
+  static const Color success = GlassTokens.success;
+  static const Color warning = GlassTokens.warning;
+  static const Color error = GlassTokens.danger;
+  static const Color offline = GlassTokens.textMuted;
+  static const Color background = GlassTokens.bgMid;
   static const Color cardBackground = Colors.white;
 }
 

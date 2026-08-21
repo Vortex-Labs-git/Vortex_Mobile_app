@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../../utils/constants.dart';
+
+import '../../../widgets/glass/glass.dart';
 
 // =============================================================================
 // LOGIN BUTTON
@@ -21,35 +22,11 @@ class LoginButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 50,
-      child: ElevatedButton(
-        onPressed: isLoading ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        child: isLoading
-            ? const SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
-            : const Text(
-                'Sign In',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-      ),
+    return GlassButton(
+      label: 'Sign In',
+      icon: Icons.login_rounded,
+      isLoading: isLoading,
+      onPressed: isLoading ? null : onPressed,
     );
   }
 }

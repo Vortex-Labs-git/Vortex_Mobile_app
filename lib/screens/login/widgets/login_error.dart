@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../../theme/glass_theme.dart';
+import '../../../widgets/glass/glass.dart';
+
 // =============================================================================
 // LOGIN ERROR
 // =============================================================================
-// Red banner that displays an error message when login fails or input is
-// invalid. Receives the error text from the parent screen.
+// Red-tinted glass banner shown when login fails or input is invalid.
+// Receives the error text from the parent screen.
 // =============================================================================
 
 class LoginError extends StatelessWidget {
@@ -14,28 +17,27 @@ class LoginError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.red.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.red.shade200),
-      ),
+    return GlassCard(
+      margin: const EdgeInsets.only(bottom: 18),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      borderRadius: BorderRadius.circular(GlassTokens.radiusSm + 2),
+      tint: GlassTokens.danger,
+      tintStrength: 0.20,
       child: Row(
         children: [
-          Icon(
+          const Icon(
             Icons.error_outline,
-            color: Colors.red.shade700,
+            color: GlassTokens.danger,
             size: 20,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
               style: TextStyle(
-                color: Colors.red.shade700,
-                fontSize: 14,
+                color: Color.lerp(GlassTokens.danger, Colors.black, 0.30),
+                fontSize: 13.5,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),

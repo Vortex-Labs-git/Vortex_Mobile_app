@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import '../theme/glass_theme.dart';
+import '../widgets/glass/glass.dart';
 import 'package:flutter/services.dart';
 
 import '../services/esp_direct_service.dart';
@@ -316,11 +319,11 @@ class _MotorCalibrationScreenState extends State<MotorCalibrationScreen> {
 
     Color bgColor;
     if (isError) {
-      bgColor = Colors.red[700]!;
+      bgColor = GlassTokens.danger;
     } else if (isWarning) {
-      bgColor = Colors.orange[700]!;
+      bgColor = GlassTokens.warning;
     } else {
-      bgColor = Colors.green[700]!;
+      bgColor = GlassTokens.success;
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -343,12 +346,8 @@ class _MotorCalibrationScreenState extends State<MotorCalibrationScreen> {
             'Valve')
         .toString();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Motor Calibration'),
-        backgroundColor: const Color(0xFF3F51B5),
-        foregroundColor: Colors.white,
-      ),
+    return GlassScaffold(
+      appBar: const GlassAppBar(title: 'Motor Calibration'),
       body: SafeArea(
         child: _isLoadingInitial
             ? const Center(child: CircularProgressIndicator())
@@ -361,7 +360,7 @@ class _MotorCalibrationScreenState extends State<MotorCalibrationScreen> {
                     Text(
                       deviceName,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: Colors.grey[700],
+                            color: GlassTokens.textSecondary,
                           ),
                     ),
                     const SizedBox(height: 16),
@@ -432,7 +431,7 @@ class _MotorCalibrationScreenState extends State<MotorCalibrationScreen> {
                             : const Icon(Icons.save),
                         label: Text(_isSaving ? 'Saving...' : 'save'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF3F51B5),
+                          backgroundColor: GlassTokens.primary,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           textStyle: const TextStyle(
@@ -476,7 +475,7 @@ class _MotorCalibrationScreenState extends State<MotorCalibrationScreen> {
                     Text(
                       'Tap repeatedly to step the motor.',
                       style: TextStyle(
-                        color: Colors.grey[600],
+                        color: GlassTokens.textMuted,
                         fontSize: 12,
                         fontStyle: FontStyle.italic,
                       ),
@@ -495,7 +494,7 @@ class _MotorCalibrationScreenState extends State<MotorCalibrationScreen> {
     return Text(
       text,
       style: TextStyle(
-        color: Colors.grey[700],
+        color: GlassTokens.textSecondary,
         fontSize: 14,
         fontWeight: FontWeight.w500,
       ),
@@ -503,13 +502,10 @@ class _MotorCalibrationScreenState extends State<MotorCalibrationScreen> {
   }
 
   Widget _buildReadOnlyValueBox(String value, {String? hint}) {
-    return Container(
+    return GlassSurface(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[300]!),
-      ),
+      borderRadius: BorderRadius.circular(GlassTokens.radiusSm),
+      showShadow: false,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -518,7 +514,9 @@ class _MotorCalibrationScreenState extends State<MotorCalibrationScreen> {
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: value == '—' ? Colors.grey : Colors.black87,
+              color: value == '—'
+                  ? GlassTokens.textMuted
+                  : GlassTokens.textPrimary,
             ),
           ),
         ],
@@ -535,27 +533,27 @@ class _MotorCalibrationScreenState extends State<MotorCalibrationScreen> {
       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
       decoration: InputDecoration(
         filled: true,
-        fillColor: Colors.grey[50],
+        fillColor: Colors.white.withValues(alpha: 0.55),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey[300]!),
+          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.75)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey[300]!),
+          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.75)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Color(0xFF3F51B5), width: 2),
+          borderSide: const BorderSide(color: GlassTokens.primary, width: 2),
         ),
       ),
     );
   }
 
   ButtonStyle _setBtnStyle() => ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF5C6BC0),
+        backgroundColor: GlassTokens.primaryBright,
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(vertical: 12),
         textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),

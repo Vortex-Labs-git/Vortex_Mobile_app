@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../theme/glass_theme.dart';
+
 // =============================================================================
 // LOGIN USERNAME FIELD
 // =============================================================================
@@ -16,15 +18,10 @@ class LoginUsernameField extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
-      decoration: InputDecoration(
+      decoration: glassInputDecoration(
         labelText: 'Username',
         hintText: 'Enter your username',
         prefixIcon: const Icon(Icons.person_outline),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        filled: true,
-        fillColor: Colors.grey.shade100,
       ),
       textInputAction: TextInputAction.next,
     );

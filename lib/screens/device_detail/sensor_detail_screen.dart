@@ -4,6 +4,8 @@ import 'dart:async';
 import '../../services/websocket_service.dart';
 import '../../services/esp_direct_service.dart';
 import '../../models/sensor_unit.dart';
+import '../../theme/glass_theme.dart';
+import '../../widgets/glass/glass.dart';
 import '../sensor_config_screen.dart';
 
 // =============================================================================
@@ -193,12 +195,10 @@ class _SensorDetailScreenState extends State<SensorDetailScreen> {
   Widget build(BuildContext context) {
     final unit = _unit;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_isDirectMode ? 'Direct Control' : 'Vortex Labs'),
-        backgroundColor:
-            _isDirectMode ? Colors.green[700] : const Color(0xFF3F51B5),
-        foregroundColor: Colors.white,
+    return GlassScaffold(
+      appBar: GlassAppBar(
+        title: _isDirectMode ? 'Direct Control' : 'Vortex Labs',
+        tint: _isDirectMode ? GlassTokens.success : null,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16),
@@ -206,7 +206,7 @@ class _SensorDetailScreenState extends State<SensorDetailScreen> {
               _wsConnected
                   ? (_isDirectMode ? Icons.settings_remote : Icons.wifi)
                   : Icons.wifi_off,
-              color: _wsConnected ? Colors.greenAccent : Colors.red,
+              color: _wsConnected ? GlassTokens.success : GlassTokens.danger,
             ),
           ),
         ],
@@ -214,7 +214,12 @@ class _SensorDetailScreenState extends State<SensorDetailScreen> {
       body: unit == null
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                16,
+                16,
+                16 + MediaQuery.paddingOf(context).bottom,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -226,7 +231,7 @@ class _SensorDetailScreenState extends State<SensorDetailScreen> {
                       padding: EdgeInsets.symmetric(vertical: 24),
                       child: Center(
                         child: Text('No sensors reported',
-                            style: TextStyle(color: Colors.grey)),
+                            style: TextStyle(color: GlassTokens.textMuted)),
                       ),
                     ),
                   const SizedBox(height: 8),
@@ -240,28 +245,18 @@ class _SensorDetailScreenState extends State<SensorDetailScreen> {
   // ----- Unit info: Product Type / Name (Edit) / Status / Active Sensors -----
   Widget _buildUnitInfoCard(SensorUnit unit) {
     final bool online = _isDeviceOnline(unit.lastSeen);
-    final Color statusColor = online ? Colors.green : Colors.red;
+    final Color statusColor = online ? GlassTokens.success : GlassTokens.danger;
     final String displayName = unit.name.isNotEmpty
         ? unit.name
         : (widget.deviceData['name']?.toString() ?? 'Sensor Unit');
 
-    return Container(
+    return GlassCard(
       // Highlighted so the unit summary stands apart from the sensor cards:
-      // light indigo tint + indigo border + soft shadow (a "lifted" look).
+      // indigo-tinted glass, where the per-sensor cards below are neutral.
       margin: const EdgeInsets.symmetric(horizontal: 4),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE8EAF6),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF3F51B5), width: 1.5),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x2E3F51B5),
-            blurRadius: 12,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
+      tint: GlassTokens.primary,
+      tintStrength: 0.22,
       child: Column(
         children: [
           _infoRow('Product Type', Text(
@@ -272,7 +267,7 @@ class _SensorDetailScreenState extends State<SensorDetailScreen> {
           _infoRow('Name', Row(children: [
             TextButton(
               onPressed: _onEditName,
-              child: const Text('Edit', style: TextStyle(color: Colors.blue)),
+              child: const Text('Edit', style: TextStyle(color: GlassTokens.primary)),
             ),
             Text(displayName, style: const TextStyle(fontWeight: FontWeight.w500)),
           ])),
@@ -302,7 +297,10 @@ class _SensorDetailScreenState extends State<SensorDetailScreen> {
 
   // ----- One sensor: Sensor Type(S01) / Tag name / Sensor value -----
   Widget _buildSensorCard(Sensor sensor) {
-    return Card(
+    return GlassCard(
+      padding: EdgeInsets.zero,
+      // Material Card used to supply this gap through its default margin.
+      margin: const EdgeInsets.fromLTRB(4, 0, 4, 12),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -406,7 +404,7 @@ class _SensorDetailScreenState extends State<SensorDetailScreen> {
 
   ButtonStyle _buttonStyle() => ElevatedButton.styleFrom(
         backgroundColor:
-            _isDirectMode ? Colors.green[700] : const Color(0xFF3F51B5),
+            _isDirectMode ? GlassTokens.success : GlassTokens.primary,
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(vertical: 16),
         textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
@@ -469,7 +467,7 @@ class _SensorDetailScreenState extends State<SensorDetailScreen> {
         builder: (dialogContext, setDialogState) => AlertDialog(
           title: const Row(
             children: [
-              Icon(Icons.wifi, color: Color(0xFF3F51B5)),
+              Icon(Icons.wifi, color: GlassTokens.primary),
               SizedBox(width: 10),
               Text('Set Home WiFi'),
             ],
@@ -479,7 +477,7 @@ class _SensorDetailScreenState extends State<SensorDetailScreen> {
             children: [
               Text(
                 'Enter your home WiFi credentials. The sensor unit will restart and connect to this network.',
-                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                style: TextStyle(fontSize: 13, color: GlassTokens.textMuted),
               ),
               const SizedBox(height: 16),
               TextField(
@@ -540,7 +538,7 @@ class _SensorDetailScreenState extends State<SensorDetailScreen> {
                           const SnackBar(
                             content: Text(
                                 'Not connected to sensor unit. Go back and reconnect.'),
-                            backgroundColor: Colors.red,
+                            backgroundColor: GlassTokens.danger,
                           ),
                         );
                         return;
@@ -564,7 +562,7 @@ class _SensorDetailScreenState extends State<SensorDetailScreen> {
                               content: Text(
                                 'WiFi credentials sent! Sensor unit will restart and connect to your home WiFi.',
                               ),
-                              backgroundColor: Colors.green,
+                              backgroundColor: GlassTokens.success,
                               duration: Duration(seconds: 5),
                             ),
                           );
